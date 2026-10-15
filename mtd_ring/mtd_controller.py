@@ -104,7 +104,20 @@ class MTDController:
 
     # Builds the dictionary the frontend draws.
     def snapshot(self) -> Dict[str, Any]:
-        raise NotImplementedError
+        now = self._now
+        has_nodes = len(self._ring) > 0
+        return {
+            "now_ms": now,
+            "exposed_id": self._exposed.id if self._has_exposed() else None,
+            "next_rotation_in_ms": max(0, self._next_rotation_at - now) if has_nodes else None,
+            "config": {
+                "rotation_interval_ms": self._config.rotation_interval_ms,
+                "attack_threshold": self._config.attack_threshold,
+                "quarantine_ms": self._config.quarantine_ms,
+            },
+            "honeypots": [node.to_dict(now) for node in self._ring],
+            "history": list(self._history),
+        }
 
     # Makes a node the exposed one, records it in the history and schedules the next rotation.
     def _expose(self, node: HoneypotNode) -> None:
