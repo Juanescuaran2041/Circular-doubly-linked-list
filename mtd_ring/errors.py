@@ -42,6 +42,14 @@ class IsolatedHoneypotError(RingError):
         super().__init__(f"{honeypot_id} is isolated and cannot be attacked", {"id": honeypot_id})
 
 
+# The state sent back by the client is malformed or was tampered with.
+class InvalidSessionError(RingError):
+    code = "invalid_session"
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(f"Invalid session: {detail}")
+
+
 # The simulated clock was asked to go backward.
 class NegativeTimeError(RingError):
     code = "negative_time"
