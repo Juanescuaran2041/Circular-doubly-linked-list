@@ -139,14 +139,3 @@ The circular list solves **who is exposed**. Other MTD problems call for other s
 2. Port hopping in addition to server rotation.
 3. A min-heap to schedule rotations per server with different intervals.
 4. Persist the attack history and use it to calibrate the threshold.
-
-## References
-
-- Patent, *Moving target defense systems and methods*: https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/11902320
-- *A Cost-effective Shuffling Method against DDoS Attacks using Moving Target Defense*: https://arxiv.org/pdf/1903.10102
-- *Using a Combination of Shuffling and Diversity Moving Target Defense Techniques*: https://distantreader.org/stacks/journals/etasr/etasr-4417.pdf
-- *Random Host and Service Multiplexing for MTD in SDN* (ICC 2019): https://utoronto.academia.edu/DilliSharma
-- *MTDSense: AI-Based Fingerprinting of MTD Techniques in SDN*: https://arxiv.org/html/2408.03758v1
-- *Risk-Based & Honeypot-Informed MTD* (poster, University of Waterloo): https://uwaterloo.ca/cybersecurity-privacy-institute/sites/default/files/uploads/documents/poster-30.pdf
-- *Dynamic Honeypot Deployment in SDN*: https://journal.uod.ac/index.php/uodjournal/article/download/3367/1916/
-- *A Survey of Moving Target Defenses for Network Security*: https://arxiv.org/pdf/1905.00964
