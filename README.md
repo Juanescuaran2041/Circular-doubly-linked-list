@@ -51,6 +51,11 @@ mtd_ring/
     threat_simulator.py        # ThreatSimulator: replays real attackers while time runs
   api/
     server.py                  # HTTP server (stdlib): JSON API + static files
+    stateless.py               # StatelessApi: same API, state kept by the client
+  session_state.py             # validation of the state sent back by the client
+api/
+  index.py                     # Vercel function (reuses the shared handler)
+vercel.json                    # Vercel: static folder, route rewrite and function options
 web/
   index.html                   # page layout
   css/styles.css               # styles
@@ -84,6 +89,7 @@ The server prints its address and opens the browser. Options:
 | `--port 9000` | Preferred port (default `8000`) |
 | `--host 127.0.0.1` | Address to listen on |
 | `--no-browser` | Do not open the browser automatically |
+| `--stateless` | The server remembers nothing and the browser keeps the state, like the Vercel deployment |
 
 If the preferred port is taken, or Windows reserves it, the server uses the next free one and says so in the terminal. Always open the address it prints.
 
@@ -147,6 +153,36 @@ The clock is **simulated** (controlled by the server), so the demo is reproducib
 
 Every response is the ring snapshot plus a `threats` object (`enabled`, `source`, `landed`, `missed` and the latest `events`).
 Every POST returns the new snapshot. Errors return `400` with `{"error": "...", "code": "...", "params": {...}}`. The snapshot shape is documented in `MTDController.snapshot()`.
+
+## Deploying to Vercel
+
+Vercel runs the API as short-lived serverless functions that keep no memory between requests, so the deployment is **stateless**: the browser keeps the whole simulation and sends it with every request. The same code runs locally with `python main.py --stateless`.
+
+- `web/` is served as static files (`outputDirectory` in `vercel.json`).
+- `api/index.py` is the only function. `vercel.json` rewrites `/api/<route>` to it, and it reuses the same handler as the local server.
+- Each response carries a `session` object (about 0.5 to 5 KB) with the ring, the clock, the history and the replay events. The browser sends it back on the next request and also saves it in `localStorage`, so a reload continues where it stopped. Clearing the site data starts a new simulation.
+- The state comes from the client, so it is never trusted: every field is type checked and bounded, ids are limited to letters, digits, `_` and `-`, IPs must be IPv4, and a body larger than 64 KB is refused. An invalid saved state is dropped and the page starts clean.
+- Requests from the page run one after another, so the next one always starts from the previous result.
+- The attacker list is downloaded inside the request that needs it (3 second limit) and cached while the function instance stays warm. If SANS ISC cannot be reached, the offline sample is used.
+
+### Deploy with your own account
+
+From the dashboard:
+
+1. Push the repository to GitHub and open <https://vercel.com/new> with **your** account.
+2. Import the repository. Framework preset: **Other**. Leave Build Command and Install Command empty; the output folder comes from `vercel.json`.
+3. Deploy, then open `https://<your-project>.vercel.app/api/state`: it must answer with JSON that includes a `session`.
+
+From the terminal, which does not need the repository to be connected to GitHub:
+
+```bash
+npm install -g vercel
+vercel login        # sign in with the account that should own the project
+vercel              # preview deployment
+vercel --prod       # production deployment
+```
+
+Before deploying, `python main.py --stateless` shows exactly the behavior the deployment will have.
 
 ## Languages
 
