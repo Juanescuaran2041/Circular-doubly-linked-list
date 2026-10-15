@@ -3,71 +3,84 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Honeypot Ring - Moving Target Defense</title>
+  <title>Mirage Ring</title>
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-  <header class="app-header">
-    <h1>Honeypot Ring</h1>
-    <p>Circular doubly linked list applied to Moving Target Defense</p>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/assets/logo.png" alt="" width="48" height="48">
+      <div>
+        <h1>Mirage Ring</h1>
+        <p>A moving target of honeypots</p>
+      </div>
+    </div>
+    <div class="clock">
+      <span class="clock-value" id="clock">0 s</span>
+      <span class="clock-caption">simulated time</span>
+      <button id="btn-auto" type="button" class="toggle" aria-pressed="false">Run automatically</button>
+    </div>
   </header>
 
-  <main class="layout">
-    <section class="panel ring-panel" aria-label="Ring visualization">
-      <svg id="ring" viewBox="0 0 500 500" role="img" aria-label="Honeypot ring"></svg>
+  <main class="workspace">
+    <section class="stage" aria-label="Honeypot ring">
+      <svg id="ring" viewBox="0 0 600 600" role="img" aria-label="Circular ring of honeypots"></svg>
       <ul class="legend">
-        <li><span class="dot exposed"></span> Exposed</li>
-        <li><span class="dot waiting"></span> Waiting</li>
-        <li><span class="dot isolated"></span> Isolated</li>
-        <li><span class="arrow next"></span> next</li>
-        <li><span class="arrow prev"></span> prev</li>
+        <li><span class="swatch exposed"></span>Exposed</li>
+        <li><span class="swatch waiting"></span>Waiting</li>
+        <li><span class="swatch isolated"></span>Isolated</li>
+        <li><span class="line next"></span>next</li>
+        <li><span class="line prev"></span>prev</li>
       </ul>
     </section>
 
-    <aside class="side">
-      <section class="panel" aria-label="Status">
-        <h2>Status</h2>
-        <dl class="stats">
-          <dt>Clock</dt><dd id="clock">0 s</dd>
-          <dt>Exposed</dt><dd id="exposed">-</dd>
-          <dt>Next rotation</dt><dd id="next-rotation">-</dd>
-          <dt>Selected</dt><dd id="selected">none</dd>
-        </dl>
-        <p id="error" class="error" role="alert" hidden></p>
-      </section>
-
-      <section class="panel" aria-label="Rotation controls">
-        <h2>Rotation</h2>
-        <div class="button-row">
-          <button id="btn-back" type="button">&larr; Step back</button>
-          <button id="btn-rotate" type="button">Rotate &rarr;</button>
+    <aside class="rail">
+      <section class="block" aria-labelledby="rotation-title">
+        <h2 id="rotation-title">Rotation</h2>
+        <div class="actions">
+          <button id="btn-back" type="button">Step back</button>
+          <button id="btn-rotate" type="button" class="primary">Rotate</button>
         </div>
-        <div class="button-row">
-          <button id="btn-time-10" type="button">+10 s</button>
-          <button id="btn-time-30" type="button">+30 s</button>
-          <button id="btn-auto" type="button" aria-pressed="false">Auto</button>
+        <div class="actions">
+          <button id="btn-time-10" type="button">Wait 10 s</button>
+          <button id="btn-time-30" type="button">Wait 30 s</button>
         </div>
       </section>
 
-      <section class="panel" aria-label="Server actions">
-        <h2>Selected server</h2>
-        <div class="button-row">
+      <section class="block" aria-labelledby="selected-title">
+        <h2 id="selected-title">Selected server</h2>
+        <p id="selected-empty" class="hint">Select a server on the ring to attack, isolate or remove it.</p>
+        <div id="selected-detail" hidden>
+          <p class="selected-name" id="selected-name"></p>
+          <p class="selected-meta" id="selected-meta"></p>
+        </div>
+        <div class="actions">
           <button id="btn-attack" type="button" class="danger" disabled>Attack</button>
           <button id="btn-isolate" type="button" disabled>Isolate</button>
           <button id="btn-remove" type="button" disabled>Remove</button>
         </div>
-        <div class="button-row">
+      </section>
+
+      <section class="block" aria-labelledby="ring-title">
+        <h2 id="ring-title">Ring</h2>
+        <div class="actions">
           <button id="btn-add" type="button">Add honeypot</button>
-          <button id="btn-reset" type="button">Reset</button>
+          <button id="btn-reset" type="button">Reset simulation</button>
         </div>
       </section>
 
-      <section class="panel" aria-label="History">
-        <h2>Exposure history</h2>
-        <ol id="history" class="history"></ol>
-      </section>
+      <p id="error" class="error" role="alert" hidden></p>
     </aside>
   </main>
+
+  <footer class="timeline" aria-labelledby="history-title">
+    <h2 id="history-title">Exposure history</h2>
+    <ol id="history" class="history"></ol>
+  </footer>
 
   <script src="/js/app.js"></script>
 </body>
