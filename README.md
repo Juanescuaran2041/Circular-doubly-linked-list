@@ -2,6 +2,14 @@
 
 <p align="center"><img src="web/assets/logo.png" alt="Mirage Ring logo" width="160"></p>
 
+## Live demo
+
+**<https://miragering.vercel.app/>**
+
+Open it, press **Run automatically** and switch on **Replay real attackers**: the exposed server keeps moving, real attacking IPs reported to SANS ISC hit the ring, and the ones aimed at a server that already rotated away are counted as missed. The simulation lives in your browser, so there is nothing to install.
+
+To run it on your own machine, see [How to run](#how-to-run).
+
 Case study of a **circular doubly linked list** (Data Structures course), applied to cybersecurity.
 Implemented in **Python** (standard library only) with a **web frontend** (HTML + CSS, plus a small JS file to draw the ring) that shows the ring in real time.
 
@@ -112,7 +120,8 @@ python -m unittest discover -v
 - The ring is drawn in SVG with hexagon nodes. The exposed server is shown in the center with a countdown to the next rotation.
 - Every rotation plays a single glowing trail from the previous exposed server to the new one (disabled when the user prefers reduced motion).
 - Click a server (or focus it and press Enter) to select it, then use **Attack**, **Isolate** or **Remove**.
-- **Rotate** and **Step back**, **Wait 10 s** / **Wait 30 s**, and **Run automatically**.
+- **Rotate** and **Step back**, and **Wait 10 s** / **Wait 30 s** to jump ahead.
+- **Run automatically** plays the whole simulation and the button turns into **Pause**. The speed selector sets how many simulated seconds pass per real second (1x, 5x, 10x or 30x; 5x by default) and is remembered.
 - **Add honeypot** and **Reset simulation**, plus a timeline of the most recently exposed servers.
 - **EN / ES** switch for the interface language, and a sun/moon icon for the light and dark themes. Both choices are remembered; the first visit follows the browser.
 
