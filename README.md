@@ -1,4 +1,6 @@
-# Honeypot Ring with Moving Target Defense (MTD)
+# Mirage Ring: Honeypot Ring with Moving Target Defense (MTD)
+
+<p align="center"><img src="web/assets/logo.png" alt="Mirage Ring logo" width="160"></p>
 
 Case study of a **circular doubly linked list** (Data Structures course), applied to cybersecurity.
 Implemented in **Python** (standard library only) with a **web frontend** (HTML + CSS, plus a small JS file to draw the ring) that shows the ring in real time.
@@ -36,7 +38,7 @@ With an array you would have to reindex on removal and use modulo arithmetic on 
 main.py                        # entry point: starts the web server
 mtd_ring/
   config.py                    # RingConfig (intervals, thresholds)
-  errors.py                    # RingError
+  errors.py                    # RingError and its specific subclasses
   honeypot_state.py            # HoneypotState enum (EXPOSED, WAITING, ISOLATED)
   honeypot_node.py             # HoneypotNode: a honeypot that is also a list node
   honeypot_ring.py             # HoneypotRing: the circular doubly linked list
@@ -47,6 +49,7 @@ web/
   index.html                   # page layout
   css/styles.css               # styles
   js/app.js                    # fetches the API and draws the SVG ring
+  assets/                      # logo and favicon
 tests/
   test_honeypot_ring.py        # structure tests
   test_mtd_controller.py       # policy tests
@@ -76,11 +79,12 @@ python -m unittest discover -v
 
 ## Frontend
 
-- Ring drawn in SVG: light arrow = `next`, dark arrow = `prev`.
-- Colors: **red** exposed, **green** waiting, **dashed gray** isolated (with a quarantine countdown).
-- Click a server to select it, then use **Attack**, **Isolate** or **Remove**.
-- **Rotate →** and **← Step back** buttons, **+10 s** / **+30 s**, and an **Auto** mode.
-- **Add honeypot** and **Reset**, plus a history of the most recently exposed servers.
+- Dark interface built around the logo palette: cyan for the exposed server, violet for `prev` links, amber for isolated servers.
+- The ring is drawn in SVG with hexagon nodes. The exposed server is shown in the center with a countdown to the next rotation.
+- Every rotation plays a single glowing trail from the previous exposed server to the new one (disabled when the user prefers reduced motion).
+- Click a server (or focus it and press Enter) to select it, then use **Attack**, **Isolate** or **Remove**.
+- **Rotate** and **Step back**, **Wait 10 s** / **Wait 30 s**, and **Run automatically**.
+- **Add honeypot** and **Reset simulation**, plus a timeline of the most recently exposed servers.
 
 The clock is **simulated** (controlled by the server), so the demo is reproducible and does not depend on real time.
 
