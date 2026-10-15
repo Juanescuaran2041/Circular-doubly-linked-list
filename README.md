@@ -43,6 +43,12 @@ mtd_ring/
   honeypot_node.py             # HoneypotNode: a honeypot that is also a list node
   honeypot_ring.py             # HoneypotRing: the circular doubly linked list
   mtd_controller.py            # MTDController: rotation, attacks, quarantine, clock
+  threat_intel/
+    attacker.py                # Attacker: an IP and its report volume
+    sans_isc_feed.py           # SansIscFeed: top attacking IPs from SANS ISC DShield
+  simulation/
+    threat_event.py            # ThreatEvent: one replayed attack
+    threat_simulator.py        # ThreatSimulator: replays real attackers while time runs
   api/
     server.py                  # HTTP server (stdlib): JSON API + static files
 web/
@@ -119,7 +125,9 @@ The clock is **simulated** (controlled by the server), so the demo is reproducib
 | POST | `/api/remove` | `{"id": "HP-1"}` | Permanent removal |
 | POST | `/api/add` | — | Adds a honeypot |
 | POST | `/api/reset` | — | Resets the simulation |
+| POST | `/api/threats` | `{"enabled": true}` | Turns the real attacker replay on or off |
 
+Every response is the ring snapshot plus a `threats` object (`enabled`, `source`, `landed`, `missed` and the latest `events`).
 Every POST returns the new snapshot. Errors return `400` with `{"error": "..."}`. The snapshot shape is documented in `MTDController.snapshot()`.
 
 ## Design decisions
@@ -147,6 +155,17 @@ The circular list solves **who is exposed**. Other MTD problems call for other s
 | Client blacklist | Hash set (IPs) and trie (CIDR ranges) | O(1) membership or prefix lookup |
 | Detecting scans to trigger a rotation | Circular buffer with a sliding window | Bounded memory, analyzes only recent events |
 | History to undo configurations | Stack | Natural LIFO for multi-step rollback |
+
+## Real attacker data (SANS ISC)
+
+The **Replay real attackers** switch feeds the simulation with the top attacking IPs reported to the
+[SANS Internet Storm Center](https://isc.sans.edu/) DShield honeypot network (`/api/topips`, no API key).
+
+- While time advances, the simulator launches attacks second by second. Attackers are picked in proportion to their report volume.
+- Most attacks hit the exposed server and go through `register_attack`, so they can trigger rotation and quarantine.
+- Some attacks aim at the server that was exposed **before** the last rotation. They are counted as **missed by rotation** and never reach the controller: this is the Moving Target Defense benefit made visible.
+- The list is cached for one hour. If SANS ISC cannot be reached, the simulation falls back to a small sample of documentation-range addresses (RFC 5737) and says so in the interface.
+- Only the IP and the report volume are real. The target server and the timing of each attack are simulated, and no traffic is sent to those addresses.
 
 ## Limitations
 

@@ -9,9 +9,12 @@ from typing import Any, Callable, Dict
 
 from mtd_ring.errors import RingError
 from mtd_ring.mtd_controller import MTDController
+from mtd_ring.simulation.threat_simulator import ThreatSimulator
+from mtd_ring.threat_intel.sans_isc_feed import SansIscFeed
 
 WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
 MAX_BODY_BYTES = 4096
+MAX_TIME_STEP_MS = 600_000
 
 
 # A client error that maps to an HTTP 400 response.
@@ -22,8 +25,9 @@ class ApiError(Exception):
 # Translates JSON requests into controller calls; the lock keeps it thread-safe.
 class RingApi:
 
-    def __init__(self, controller: MTDController) -> None:
+    def __init__(self, controller: MTDController, simulator: ThreatSimulator) -> None:
         self._controller = controller
+        self._simulator = simulator
         self._lock = threading.Lock()
         self._routes: Dict[str, Callable[[Dict[str, Any]], None]] = {
             "/api/time": self._time,
@@ -33,11 +37,12 @@ class RingApi:
             "/api/remove": self._remove,
             "/api/add": self._add,
             "/api/reset": self._reset,
+            "/api/threats": self._threats,
         }
 
     def state(self) -> Dict[str, Any]:
         with self._lock:
-            return self._controller.snapshot()
+            return self._snapshot()
 
     def post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         action = self._routes.get(path)
@@ -48,7 +53,13 @@ class RingApi:
                 action(body)
             except RingError as error:
                 raise ApiError(str(error)) from error
-            return self._controller.snapshot()
+            return self._snapshot()
+
+    # The ring snapshot plus the threat simulator state.
+    def _snapshot(self) -> Dict[str, Any]:
+        snapshot = self._controller.snapshot()
+        snapshot["threats"] = self._simulator.snapshot()
+        return snapshot
 
     @staticmethod
     def _required(body: Dict[str, Any], key: str, kind: type) -> Any:
@@ -61,7 +72,9 @@ class RingApi:
         ms = self._required(body, "ms", int)
         if ms < 0:
             raise ApiError("'ms' must not be negative")
-        self._controller.advance_time(ms)
+        if ms > MAX_TIME_STEP_MS:
+            raise ApiError(f"'ms' must not exceed {MAX_TIME_STEP_MS}")
+        self._simulator.advance(ms)
 
     def _rotate(self, body: Dict[str, Any]) -> None:
         self._controller.rotate(body.get("direction", 1))
@@ -80,6 +93,16 @@ class RingApi:
 
     def _reset(self, body: Dict[str, Any]) -> None:
         self._controller.reset()
+        self._simulator.clear()
+
+    def _threats(self, body: Dict[str, Any]) -> None:
+        enabled = body.get("enabled")
+        if not isinstance(enabled, bool):
+            raise ApiError("'enabled' is required and must be a boolean")
+        if enabled:
+            self._simulator.enable()
+        else:
+            self._simulator.disable()
 
 
 def make_handler(api: RingApi) -> type:
@@ -142,7 +165,8 @@ def make_handler(api: RingApi) -> type:
 
 
 def run(host: str = "127.0.0.1", port: int = 8000) -> None:
-    api = RingApi(MTDController())
+    controller = MTDController()
+    api = RingApi(controller, ThreatSimulator(controller, SansIscFeed()))
     server = ThreadingHTTPServer((host, port), make_handler(api))
     print(f"Serving on http://{host}:{port}  (Ctrl+C to stop)")
     try:
