@@ -22,6 +22,9 @@ const ui = {
   feed: document.getElementById("feed"),
   feedEmpty: document.getElementById("feed-empty"),
   statAttacks: document.getElementById("stat-attacks"),
+  statMissed: document.getElementById("stat-missed"),
+  threatsButton: document.getElementById("btn-threats"),
+  threatSource: document.getElementById("threat-source"),
   statRotations: document.getElementById("stat-rotations"),
   statIsolated: document.getElementById("stat-isolated"),
   statServers: document.getElementById("stat-servers"),
@@ -34,7 +37,8 @@ let autoTimer = null;
 let lastExposedId = null;
 let activityResetPending = false;
 
-const session = { attacks: 0, rotations: 0, feed: [], pendingHits: [] };
+const session = { attacks: 0, rotations: 0, feed: [], pendingHits: [], pendingMisses: [], lastEventId: 0 };
+const DEFAULT_THREAT_HINT = "Replays the top attacking IPs reported to SANS ISC DShield while time runs.";
 
 /* ---------- API ---------- */
 
@@ -68,8 +72,8 @@ function showError(message) {
 
 /* ---------- Activity derived from consecutive snapshots ---------- */
 
-function logEvent(time, kind, text) {
-  session.feed.unshift({ time, kind, text });
+function logEvent(time, kind, text, detail = "") {
+  session.feed.unshift({ time, kind, text, detail });
   session.feed.length = Math.min(session.feed.length, FEED_LIMIT);
 }
 
@@ -78,7 +82,34 @@ function resetActivity() {
   session.rotations = 0;
   session.feed = [];
   session.pendingHits = [];
+  session.pendingMisses = [];
   lastExposedId = null;
+}
+
+function latestEventId(snapshot) {
+  const events = (snapshot.threats && snapshot.threats.events) || [];
+  return events.reduce((latest, event) => Math.max(latest, event.id), 0);
+}
+
+// Logs the replayed attackers that arrived since the last snapshot; returns the servers they struck.
+function trackThreats(current) {
+  const events = (current.threats && current.threats.events) || [];
+  const fresh = events.filter((event) => event.id > session.lastEventId);
+  session.lastEventId = Math.max(session.lastEventId, latestEventId(current));
+
+  const struck = new Set();
+  for (const event of fresh) {
+    const detail = `Reported ${event.reports.toLocaleString("en-US")} times by SANS ISC sensors`;
+    if (event.outcome === "landed") {
+      struck.add(event.target);
+      session.attacks += 1;
+      logEvent(event.time_ms, "attack", `${event.ip} struck ${event.target}`, detail);
+    } else {
+      session.pendingMisses.push(event.target);
+      logEvent(event.time_ms, "miss", `${event.ip} aimed at ${event.target}, which had already rotated away`, detail);
+    }
+  }
+  return struck;
 }
 
 // Compares two snapshots and records what changed: attacks, rotations, quarantines and membership.
@@ -87,10 +118,12 @@ function trackChanges(previous, current) {
   if (activityResetPending || timeWentBack || !previous) {
     activityResetPending = false;
     resetActivity();
+    session.lastEventId = latestEventId(current);
     return;
   }
 
   const time = current.now_ms;
+  const covered = trackThreats(current);
   const before = new Map(previous.honeypots.map((node) => [node.id, node]));
   const after = new Map(current.honeypots.map((node) => [node.id, node]));
 
@@ -101,9 +134,11 @@ function trackChanges(previous, current) {
       continue;
     }
     if (node.attacks > old.attacks) {
-      session.attacks += node.attacks - old.attacks;
       session.pendingHits.push(id);
-      logEvent(time, "attack", `${id} was attacked (${node.attacks} of ${current.config.attack_threshold})`);
+      if (!covered.has(id)) {
+        session.attacks += node.attacks - old.attacks;
+        logEvent(time, "attack", `${id} was attacked (${node.attacks} of ${current.config.attack_threshold})`);
+      }
     }
     if (node.state === "ISOLATED" && old.state !== "ISOLATED") {
       logEvent(time, "isolate", `${id} moved to quarantine`);
@@ -115,10 +150,28 @@ function trackChanges(previous, current) {
   for (const id of before.keys()) {
     if (!after.has(id)) logEvent(time, "ring", `${id} was removed`);
   }
-  if (current.exposed_id && current.exposed_id !== previous.exposed_id) {
-    session.rotations += 1;
-    logEvent(time, "rotate", `Exposure moved from ${previous.exposed_id || "nowhere"} to ${current.exposed_id}`);
+  const moves = appendedCount(previous.history, current.history);
+  if (current.exposed_id && moves > 0) {
+    session.rotations += moves;
+    logEvent(
+      time,
+      "rotate",
+      moves === 1
+        ? `Exposure moved from ${previous.exposed_id || "nowhere"} to ${current.exposed_id}`
+        : `Exposure moved ${moves} times and now sits on ${current.exposed_id}`,
+    );
   }
+}
+
+// Counts how many exposures were appended to the history, even when several happen between two snapshots.
+function appendedCount(before, after) {
+  for (let skipped = 0; skipped <= before.length; skipped += 1) {
+    const overlap = before.slice(skipped);
+    if (overlap.length <= after.length && overlap.every((id, index) => after[index] === id)) {
+      return after.length - overlap.length;
+    }
+  }
+  return after.length;
 }
 
 /* ---------- Geometry helpers ---------- */
@@ -223,13 +276,13 @@ function drawRipple(node, index, total, size) {
   ui.ring.appendChild(svgElement("polygon", { points: hexagonPoints(x, y, size), class: "ripple" }));
 }
 
-// A red beam coming from outside the ring and striking an attacked server.
-function drawBeam(index, total, size) {
+// A beam coming from outside the ring: red when it strikes a server, violet when it fizzles short of it.
+function drawBeam(index, total, size, missed = false) {
   const angle = angleOf(index, total);
   const start = pointAt(angle, RING_RADIUS + 150);
-  const end = pointAt(angle, RING_RADIUS + size + 6);
+  const end = pointAt(angle, RING_RADIUS + size + (missed ? 40 : 6));
   ui.ring.appendChild(svgElement("path", {
-    d: `M ${start.x} ${start.y} L ${end.x} ${end.y}`, class: "beam", pathLength: 1,
+    d: `M ${start.x} ${start.y} L ${end.x} ${end.y}`, class: missed ? "beam miss" : "beam", pathLength: 1,
   }));
 }
 
@@ -293,6 +346,7 @@ function renderRing() {
   const nodes = state.honeypots;
   const size = nodeSize(nodes.length);
   const struck = new Set(session.pendingHits);
+  const missed = new Set(session.pendingMisses);
   ui.ring.replaceChildren();
 
   const defs = svgElement("defs");
@@ -313,16 +367,24 @@ function renderRing() {
   drawTrail(nodes);
   nodes.forEach((node, index) => {
     if (struck.has(node.id)) drawBeam(index, nodes.length, size);
+    if (missed.has(node.id)) drawBeam(index, nodes.length, size, true);
     drawNode(node, index, nodes.length, size, struck.has(node.id));
   });
   drawCenter();
   session.pendingHits = [];
+  session.pendingMisses = [];
 }
 
 /* ---------- Side panels ---------- */
 
 function renderStats() {
+  const threats = state.threats || { enabled: false, missed: 0, source: "" };
   ui.statAttacks.textContent = session.attacks;
+  ui.statMissed.textContent = threats.missed;
+  ui.threatsButton.setAttribute("aria-pressed", String(threats.enabled));
+  ui.threatSource.textContent = threats.enabled
+    ? `Source: ${threats.source}. Attacks arrive while time runs.`
+    : DEFAULT_THREAT_HINT;
   ui.statRotations.textContent = session.rotations;
   ui.statIsolated.textContent = state.honeypots.filter((node) => node.state === "ISOLATED").length;
   ui.statServers.textContent = state.honeypots.length;
@@ -357,6 +419,12 @@ function renderFeed() {
     time.textContent = clockText(entry.time);
     const text = document.createElement("span");
     text.textContent = entry.text;
+    if (entry.detail) {
+      const detail = document.createElement("span");
+      detail.className = "detail";
+      detail.textContent = entry.detail;
+      text.appendChild(detail);
+    }
     item.append(time, text);
     return item;
   }));
@@ -429,6 +497,11 @@ bind("btn-time-10", () => send("/api/time", { ms: 10000 }));
 bind("btn-time-30", () => send("/api/time", { ms: 30000 }));
 bind("btn-auto", toggleAuto);
 bind("btn-theme", toggleTheme);
+bind("btn-threats", async () => {
+  ui.threatsButton.disabled = true;
+  await send("/api/threats", { enabled: !(state && state.threats && state.threats.enabled) });
+  ui.threatsButton.disabled = false;
+});
 bind("btn-attack", () => selectedId && send("/api/attack", { id: selectedId }));
 bind("btn-isolate", () => selectedId && send("/api/isolate", { id: selectedId }));
 bind("btn-remove", () => selectedId && send("/api/remove", { id: selectedId }));
