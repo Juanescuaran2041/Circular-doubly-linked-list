@@ -68,7 +68,7 @@ ol, ul { list-style: none; }
   min-height: 0;
 }
 
-#ring { width: min(100%, 72vh); height: auto; display: block; overflow: visible; }
+#ring { width: min(100%, 62vh); height: auto; display: block; overflow: visible; }
 
 .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; color: var(--mist-dim); font-size: 0.875rem; }
 .legend li { display: flex; align-items: center; gap: 8px; }
@@ -87,8 +87,8 @@ ol, ul { list-style: none; }
 .node.exposed .node-shape { fill: #0e3a48; stroke: var(--cyan); filter: drop-shadow(0 0 14px rgba(34, 211, 238, 0.65)); }
 .node.isolated .node-shape { fill: rgba(245, 165, 36, 0.1); stroke: var(--amber); stroke-dasharray: 6 5; }
 .node:hover .node-shape { stroke-width: 3.5; }
-.node.selected .node-shape { stroke: var(--mist); stroke-width: 4; }
-.node:focus-visible .node-shape { stroke: var(--mist); stroke-width: 4.5; }
+.node.selected .node-shape { stroke-width: 4; filter: drop-shadow(0 0 7px var(--mist)); }
+.node:focus-visible .node-shape { stroke-width: 4.5; filter: drop-shadow(0 0 7px var(--mist)); }
 .node-id { font-family: var(--font-display); font-size: 15px; font-weight: 700; text-anchor: middle; fill: var(--mist); pointer-events: none; }
 .node-sub { font-size: 11px; text-anchor: middle; fill: var(--mist-dim); pointer-events: none; font-variant-numeric: tabular-nums; }
 .node.exposed .node-sub { fill: var(--cyan); }
