@@ -76,7 +76,15 @@ class MTDController:
 
     # Permanently removes a honeypot, moving the exposure first if it was the exposed one.
     def remove(self, honeypot_id: str) -> None:
-        raise NotImplementedError
+        node = self._ring.get(honeypot_id)
+
+        if node is self._exposed:
+            if len(self._ring) > 1:
+                self.rotate(1)
+            if self._exposed is node:
+                self._exposed = node.next if len(self._ring) > 1 else None
+
+        self._ring.remove(honeypot_id)
 
     # Moves the simulated clock, running the due rotation and releasing finished quarantines.
     def advance_time(self, ms: int) -> None:
