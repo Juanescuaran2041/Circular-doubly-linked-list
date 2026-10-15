@@ -5,6 +5,7 @@ from collections import deque
 from typing import Any, Deque, Dict, Optional
 
 from mtd_ring.mtd_controller import MTDController
+from mtd_ring.session_state import parse_threat_state
 from mtd_ring.simulation.threat_event import LANDED, MISSED, ThreatEvent
 from mtd_ring.threat_intel.attacker import Attacker
 from mtd_ring.threat_intel.sans_isc_feed import SansIscFeed
@@ -35,6 +36,34 @@ class ThreatSimulator:
         self._next_id = 1
         self._landed = 0
         self._missed = 0
+
+    # Tells if the replay is turned on.
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    # Exports the replay state, so a client can keep it between requests.
+    def export_state(self) -> Dict[str, Any]:
+        return {
+            "enabled": self._enabled,
+            "next_id": self._next_id,
+            "landed": self._landed,
+            "missed": self._missed,
+            "events": [event.to_dict() for event in self._events],
+        }
+
+    # Rebuilds the replay state from an exported one; raises InvalidSessionError when it is malformed.
+    def restore_state(self, data: Any) -> None:
+        parsed = parse_threat_state(data)
+        self._enabled = parsed.enabled
+        self._next_id = parsed.next_id
+        self._landed = parsed.landed
+        self._missed = parsed.missed
+        self._events.clear()
+        for event in parsed.events:
+            self._events.append(
+                ThreatEvent(event.id, event.time_ms, event.ip, event.reports, event.target, event.outcome)
+            )
 
     # Starts generating attacks and loads the attacker list.
     def enable(self) -> None:

@@ -10,6 +10,7 @@ from mtd_ring.errors import (
 )
 from mtd_ring.honeypot_node import HoneypotNode
 from mtd_ring.honeypot_ring import HoneypotRing
+from mtd_ring.session_state import parse_controller_state
 
 
 # Moving Target Defense policy on top of the ring: rotation, attacks, quarantine and a simulated clock.
@@ -122,6 +123,40 @@ class MTDController:
             "honeypots": [node.to_dict(now) for node in self._ring],
             "history": list(self._history),
         }
+
+    # Exports everything needed to rebuild this controller later, so a client can keep the state for us.
+    def export_state(self) -> Dict[str, Any]:
+        return {
+            "now": self._now,
+            "next_rotation_at": self._next_rotation_at,
+            "id_counter": self._id_counter,
+            "history": list(self._history),
+            "exposed": self._exposed.id if self._exposed is not None else None,
+            "honeypots": [
+                {
+                    "id": node.id,
+                    "state": node.state.value,
+                    "attacks": node.attacks,
+                    "quarantine_ends_at": node.quarantine_ends_at,
+                }
+                for node in self._ring
+            ],
+        }
+
+    # Rebuilds the controller from an exported state; raises InvalidSessionError when it is malformed.
+    def restore_state(self, data: Any) -> None:
+        parsed = parse_controller_state(data, self._config.history_limit)
+        self._ring.clear()
+        for entry in parsed.honeypots:
+            node = self._ring.append(entry.id)
+            node.state = entry.state
+            node.attacks = entry.attacks
+            node.quarantine_ends_at = entry.quarantine_ends_at
+        self._exposed = self._ring.get(parsed.exposed) if parsed.exposed is not None else None
+        self._now = parsed.now
+        self._next_rotation_at = parsed.next_rotation_at
+        self._id_counter = parsed.id_counter
+        self._history = list(parsed.history)
 
     # Makes a node the exposed one, records it in the history and schedules the next rotation.
     def _expose(self, node: HoneypotNode) -> None:
