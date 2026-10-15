@@ -1,55 +1,57 @@
-# Anillo de honeypots con Moving Target Defense (MTD)
+# Honeypot Ring with Moving Target Defense (MTD)
 
-Caso de estudio de **lista circular doblemente enlazada** (Estructuras de Datos), aplicado a ciberseguridad.
-Implementado en **Python** (solo librería estándar) con un **frontend web** que dibuja el anillo en tiempo real.
+Case study of a **circular doubly linked list** (Data Structures course), applied to cybersecurity.
+Implemented in **Python** (standard library only) with a **web frontend** that draws the ring in real time.
 
-## Descripción
+> Code identifiers, file names and the UI text are in Spanish (e.g. `agregar`, `rotar`, `intervalo_ms`). This README uses the real names so you can find them in the code.
 
-Un conjunto de servidores señuelo (honeypots) forma un anillo. **Solo uno está expuesto a la red** y la exposición rota de forma continua. Así, la información que un atacante obtiene en el reconocimiento queda obsoleta. Si el servidor expuesto recibe un ataque, la rotación es inmediata, y los servidores que acumulan demasiados ataques pasan a cuarentena.
+## Description
 
-## Contexto: Moving Target Defense
+A set of decoy servers (honeypots) forms a ring. **Only one is exposed to the network at a time**, and the exposure rotates continuously, so the information an attacker gathers during reconnaissance quickly becomes stale. If the exposed server is attacked, the rotation happens immediately, and servers that accumulate too many attacks are put in quarantine.
 
-MTD es una estrategia de defensa proactiva: en vez de proteger un sistema estático, cambia periódicamente la superficie de ataque. En red, las técnicas más comunes son el salto de IP, el salto de puertos y la migración de servicios entre máquinas virtuales. Un esquema habitual usa un intervalo de rotación largo por defecto y rota de inmediato cuando se sospecha un ataque, que es justamente la política que implementa este caso. Los honeypots estáticos son fáciles de identificar, y rotar cuál está expuesto ayuda a resolver ese problema.
+## Background: Moving Target Defense
 
-## Reglas del sistema
+MTD is a proactive defense strategy: instead of protecting a static system, it periodically changes the attack surface. At the network level, the most common techniques are IP hopping, port hopping and migrating services between virtual machines. A common scheme uses a long rotation interval by default and rotates immediately when an attack is suspected, which is exactly the policy implemented in this case. Static honeypots are easy to fingerprint, and rotating which one is exposed helps address that problem.
 
-1. Cada `intervalo_ms` (30 s por defecto) la exposición pasa al siguiente servidor del anillo.
-2. Si atacan al servidor expuesto, la rotación es **inmediata**.
-3. Un servidor que acumula `umbral_ataques` (3 por defecto) se **aísla** en cuarentena y la rotación lo salta.
-4. Terminada la cuarentena (`cuarentena_ms`, 60 s por defecto) el servidor vuelve al anillo.
-5. Se puede **retroceder** al servidor anterior (rollback) si una rotación causó problemas.
-6. Un servidor comprometido de forma definitiva se **retira** del anillo en O(1).
+## System rules
 
-## ¿Por qué una lista circular doblemente enlazada?
+1. Every `intervalo_ms` (30 s by default) the exposure moves to the next server in the ring.
+2. If the exposed server is attacked, the rotation is **immediate**.
+3. A server that reaches `umbral_ataques` attacks (3 by default) is **isolated** (quarantined) and the rotation skips it.
+4. When the quarantine ends (`cuarentena_ms`, 60 s by default) the server goes back to the ring.
+5. You can **step back** to the previous server (rollback) if a rotation caused problems.
+6. A permanently compromised server is **removed** from the ring in O(1).
 
-| Característica | Qué resuelve |
+## Why a circular doubly linked list?
+
+| Feature | What it solves |
 |---|---|
-| **Circular** | La rotación nunca termina: después del último viene el primero, sin `None` que manejar. |
-| **Doble** (`prev`) | Permite el rollback hacia atrás y retirar un nodo conocido en O(1) enlazando sus vecinos. |
-| **Nodo como referencia** | Con un `dict` id → nodo, aislar y retirar no necesitan recorrer la lista. |
+| **Circular** | The rotation never ends: the last node is followed by the first, so there is no `None` to handle. |
+| **Doubly linked** (`prev`) | Enables backward rollback and removing a known node in O(1) by linking its neighbors. |
+| **Node as a reference** | With a `dict` of id → node, isolating and removing nodes needs no traversal. |
 
-Con un arreglo habría que reindexar al retirar y usar módulo en cada movimiento.
+With an array you would have to reindex on removal and use modulo arithmetic on every move.
 
-## Estructura del proyecto
+## Project structure
 
 ```
-lista_circular_doble.py   # estructura genérica (Nodo + ListaCircularDoble)
-anillo_mtd.py             # lógica del dominio: estados, rotación, ataques, cuarentena
-servidor.py               # servidor HTTP (stdlib): API JSON + sirve el frontend
-index.html                # frontend: anillo en SVG, controles y historial
-test_anillo.py            # pruebas unitarias (unittest)
+lista_circular_doble.py   # generic structure (Nodo + ListaCircularDoble)
+anillo_mtd.py             # domain logic: states, rotation, attacks, quarantine
+servidor.py               # HTTP server (stdlib): JSON API + serves the frontend
+index.html                # frontend: SVG ring, controls and history
+test_anillo.py            # unit tests (unittest)
 ```
 
-## Cómo ejecutar
+## How to run
 
-Requiere Python 3.9 o superior. No hay dependencias que instalar.
+Requires Python 3.9 or higher. There are no dependencies to install.
 
 ```bash
 python servidor.py
-# abrir http://localhost:8000
+# open http://localhost:8000
 ```
 
-Pruebas:
+Tests:
 
 ```bash
 python -m unittest -v
@@ -57,94 +59,94 @@ python -m unittest -v
 
 ## Frontend
 
-- Anillo dibujado en SVG: flecha clara = `next`, flecha oscura = `prev`.
-- Colores: **rojo** expuesto, **verde** en espera, **gris punteado** aislado (con cuenta regresiva de cuarentena).
-- Clic en un servidor para seleccionarlo y luego **Atacar**, **Aislar** o **Retirar**.
-- Botones **Rotar →** y **← Retroceder**, **+10 s** / **+30 s** y modo **Auto**.
-- **Agregar honeypot** y **Reiniciar**, más el historial de los últimos servidores expuestos.
+- Ring drawn in SVG: light arrow = `next`, dark arrow = `prev`.
+- Colors: **red** exposed, **green** waiting, **dashed gray** isolated (with a quarantine countdown).
+- Click a server to select it, then use **Atacar** (attack), **Aislar** (isolate) or **Retirar** (remove).
+- **Rotar →** (rotate) and **← Retroceder** (step back) buttons, **+10 s** / **+30 s**, and an **Auto** mode.
+- **Agregar honeypot** (add) and **Reiniciar** (reset), plus a history of the most recently exposed servers.
 
-El reloj es **simulado** (lo controla el servidor), así que la demo es reproducible y no depende del tiempo real.
+The clock is **simulated** (controlled by the server), so the demo is reproducible and does not depend on real time.
 
-## Estados de un servidor
+## Server states
 
-| Estado | Significado | Transición |
+| State | Meaning | Transition |
 |---|---|---|
-| `EXPUESTO` | Es el único visible a la red | → `EN_ESPERA` al rotar; → `AISLADO` al superar el umbral |
-| `EN_ESPERA` | En el anillo, listo para ser expuesto | → `EXPUESTO` cuando le toca |
-| `AISLADO` | En cuarentena, la rotación lo salta | → `EN_ESPERA` al terminar la cuarentena |
+| `EXPUESTO` (exposed) | The only one visible to the network | → `EN_ESPERA` on rotation; → `AISLADO` when the attack threshold is reached |
+| `EN_ESPERA` (waiting) | In the ring, ready to be exposed | → `EXPUESTO` when its turn comes |
+| `AISLADO` (isolated) | In quarantine, skipped by the rotation | → `EN_ESPERA` when the quarantine ends |
 
-## Operaciones y complejidad
+## Operations and complexity
 
-| Operación | Costo | Nota |
+| Operation | Cost | Note |
 |---|---|---|
-| `agregar` | O(1) | Inserta al final (`head.prev`) |
-| `rotar` | O(1) típico, O(n) peor caso | Peor caso: salta muchos aislados |
-| `registrar_ataque` | O(1) + rotación | Rota solo si el atacado es el expuesto |
-| `aislar` | O(1) + rotación | El nodo se queda en el anillo |
-| `retirar` | O(1) | `eliminar(nodo)` sin buscar |
-| `tick` | O(n) | Revisa cuarentenas; con un min-heap bajaría a O(log n) por evento |
+| `agregar` | O(1) | Inserts at the end (`head.prev`) |
+| `rotar` | O(1) typical, O(n) worst case | Worst case: skips many isolated nodes |
+| `registrar_ataque` | O(1) + rotation | Rotates only if the attacked server is the exposed one |
+| `aislar` | O(1) + rotation | The node stays in the ring |
+| `retirar` | O(1) | `eliminar(nodo)` with no search |
+| `tick` | O(n) | Checks quarantines; a min-heap would reduce it to O(log n) per event |
 
-## API REST
+## REST API
 
-| Método | Ruta | Cuerpo | Efecto |
+| Method | Route | Body | Effect |
 |---|---|---|---|
-| GET | `/api/estado` | — | Foto del anillo |
-| POST | `/api/tiempo` | `{"ms": 10000}` | Avanza el reloj y ejecuta `tick` |
-| POST | `/api/rotar` | `{"sentido": 1}` o `-1` | Rota adelante o atrás |
-| POST | `/api/atacar` | `{"id": "HP-1"}` | Registra un ataque |
-| POST | `/api/aislar` | `{"id": "HP-1"}` | Cuarentena inmediata |
-| POST | `/api/retirar` | `{"id": "HP-1"}` | Retiro permanente |
-| POST | `/api/agregar` | — | Agrega un honeypot |
-| POST | `/api/reiniciar` | — | Reinicia la simulación |
+| GET | `/api/estado` | — | Snapshot of the ring |
+| POST | `/api/tiempo` | `{"ms": 10000}` | Advances the clock and runs `tick` |
+| POST | `/api/rotar` | `{"sentido": 1}` or `-1` | Rotates forward or backward |
+| POST | `/api/atacar` | `{"id": "HP-1"}` | Registers an attack |
+| POST | `/api/aislar` | `{"id": "HP-1"}` | Immediate quarantine |
+| POST | `/api/retirar` | `{"id": "HP-1"}` | Permanent removal |
+| POST | `/api/agregar` | — | Adds a honeypot |
+| POST | `/api/reiniciar` | — | Resets the simulation |
 
-Los errores responden `400` con `{"error": "..."}`.
+Errors return `400` with `{"error": "..."}`.
 
-## Decisiones de diseño
+## Design decisions
 
-- **Aislar vs. retirar:** aislar es temporal y el nodo permanece en el anillo; retirar es permanente y el nodo sale.
-- **Ancla de la rotación (`_expuesto`):** puede quedar apuntando a un nodo aislado y es intencional, porque la rotación necesita una referencia desde donde buscar.
-- **Tope `size` al buscar candidato:** evita el ciclo infinito típico de las listas circulares cuando todos los nodos están aislados.
-- **Tiempo como parámetro (`ahora`):** la lógica no usa el reloj del sistema, por lo que es determinista y se prueba sin esperas.
-- **Un solo `tick` por llamada:** aunque pase más de un intervalo, solo se hace una rotación.
+- **Isolate vs. remove:** isolating is temporary and the node stays in the ring; removing is permanent and the node leaves.
+- **Rotation anchor (`_expuesto`):** it may end up pointing to an isolated node, and that is intentional, because the rotation needs a reference point to search from.
+- **`size` cap when searching for a candidate:** avoids the classic infinite loop of circular lists when every node is isolated.
+- **Time as a parameter (`ahora`):** the logic never reads the system clock, so it is deterministic and testable without waiting.
+- **One `tick` per call:** even if more than one interval has passed, only one rotation happens.
 
-## Casos borde cubiertos por las pruebas
+## Edge cases covered by the tests
 
-Lista vacía, un solo nodo (se apunta a sí mismo), eliminar head, medio y único nodo, ciclo completo de rotación, ataque al expuesto, umbral de aislamiento, fin de cuarentena, todos los nodos aislados (sin ciclo infinito y con recuperación), rollback con vuelta por el extremo, retirar el expuesto, retirar al único y volver a agregar, id duplicado e id inexistente.
+Empty list, single node (points to itself), removing head, middle and only node, full rotation cycle, attack on the exposed server, isolation threshold, end of quarantine, all nodes isolated (no infinite loop, and recovery), rollback wrapping around the other end, removing the exposed server, removing the only node and adding again, duplicate id and unknown id.
 
-## Otras estructuras de datos aplicables a MTD
+## Other data structures applicable to MTD
 
-La lista circular resuelve **quién está expuesto**. Otros problemas de MTD piden otra estructura:
+The circular list solves **who is exposed**. Other MTD problems call for other structures:
 
-| Problema | Estructura | Por qué |
+| Problem | Structure | Why |
 |---|---|---|
-| Mapear IP real a IP virtual | Tabla hash (`dict`) en ambos sentidos | Traducción O(1) por paquete |
-| Elegir IPs o puertos nuevos sin repetir | Conjunto de libres + cola FIFO de expiración | Tomar uno es O(1); con TTL fijo caducan en orden |
-| Programar el próximo salto de cada host | Min-heap por timestamp | Extraer el próximo evento en O(log n) |
-| Mutación de topología y rutas | Grafo (lista de adyacencia) | Rutas alternativas con BFS o Dijkstra |
-| Lista negra de clientes | Conjunto hash (IPs) y trie (rangos CIDR) | Pertenencia O(1) o por prefijo |
-| Detectar escaneo para disparar la rotación | Buffer circular con ventana | Memoria acotada, solo analiza lo reciente |
-| Historial para deshacer configuraciones | Pila | LIFO natural para rollback múltiple |
+| Mapping real IP to virtual IP | Hash table (`dict`) in both directions | O(1) translation per packet |
+| Picking new IPs or ports without repeats | Set of free values + FIFO expiry queue | Taking one is O(1); with a fixed TTL they expire in order |
+| Scheduling each host's next hop | Min-heap by timestamp | Extracting the next event in O(log n) |
+| Topology and route mutation | Graph (adjacency list) | Alternative routes with BFS or Dijkstra |
+| Client blacklist | Hash set (IPs) and trie (CIDR ranges) | O(1) membership or prefix lookup |
+| Detecting scans to trigger a rotation | Circular buffer with a sliding window | Bounded memory, analyzes only recent events |
+| History to undo configurations | Stack | Natural LIFO for multi-step rollback |
 
-## Limitaciones
+## Limitations
 
-- Es una **simulación** de la lógica de planificación: no cambia IPs ni puertos reales. Para eso haría falta SDN o reglas de firewall.
-- El intervalo fijo es **predecible**: hay trabajo que muestra que un atacante con IA puede inferir cuándo se dispara una rotación de IP. Una mejora sencilla es sumar un jitter aleatorio al intervalo.
-- Cada rotación tiene un costo en recursos, por lo que rotar más seguido no siempre es mejor.
+- This is a **simulation** of the scheduling logic: it does not change real IPs or ports. That would require SDN or firewall rules.
+- A fixed interval is **predictable**: there is research showing that an AI-capable attacker can infer when an IP rotation is triggered. A simple improvement is to add random jitter to the interval.
+- Every rotation has a resource cost, so rotating more often is not always better.
 
-## Posibles extensiones
+## Possible extensions
 
-1. Jitter aleatorio en el intervalo de rotación.
-2. Salto de puerto además de la rotación de servidor.
-3. Min-heap para programar rotaciones por servidor con intervalos distintos.
-4. Persistir el historial de ataques y usarlo para calibrar el umbral.
+1. Random jitter on the rotation interval.
+2. Port hopping in addition to server rotation.
+3. A min-heap to schedule rotations per server with different intervals.
+4. Persist the attack history and use it to calibrate the threshold.
 
-## Referencias
+## References
 
-- Patente, *Moving target defense systems and methods*: https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/11902320
+- Patent, *Moving target defense systems and methods*: https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/11902320
 - *A Cost-effective Shuffling Method against DDoS Attacks using Moving Target Defense*: https://arxiv.org/pdf/1903.10102
 - *Using a Combination of Shuffling and Diversity Moving Target Defense Techniques*: https://distantreader.org/stacks/journals/etasr/etasr-4417.pdf
 - *Random Host and Service Multiplexing for MTD in SDN* (ICC 2019): https://utoronto.academia.edu/DilliSharma
 - *MTDSense: AI-Based Fingerprinting of MTD Techniques in SDN*: https://arxiv.org/html/2408.03758v1
-- *Risk-Based & Honeypot-Informed MTD* (póster, University of Waterloo): https://uwaterloo.ca/cybersecurity-privacy-institute/sites/default/files/uploads/documents/poster-30.pdf
+- *Risk-Based & Honeypot-Informed MTD* (poster, University of Waterloo): https://uwaterloo.ca/cybersecurity-privacy-institute/sites/default/files/uploads/documents/poster-30.pdf
 - *Dynamic Honeypot Deployment in SDN*: https://journal.uod.ac/index.php/uodjournal/article/download/3367/1916/
 - *A Survey of Moving Target Defenses for Network Security*: https://arxiv.org/pdf/1905.00964
