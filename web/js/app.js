@@ -7,6 +7,7 @@ const AUTO_STEP_MS = 1000;
 const FEED_LIMIT = 40;
 const MAX_PIPS = 6;
 const REQUEST_TIMEOUT_MS = 12000;
+const SESSION_STORAGE_KEY = "mirage-session";
 const LOADING_POLL_MS = 1500;
 
 const ui = {
@@ -40,16 +41,48 @@ let lastExposedId = null;
 let activityResetPending = false;
 let currentError = null;
 let loadingPoll = null;
+let serverSession = null;
+let queue = Promise.resolve();
+let pending = 0;
 
 const session = { attacks: 0, rotations: 0, feed: [], pendingHits: [], pendingMisses: [], lastEventId: 0 };
 
 /* ---------- API ---------- */
 
+// Reads the simulation the browser kept from a previous visit, if any.
+function loadStoredSession() {
+  try {
+    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Keeps the simulation in the browser so a reload continues where it stopped.
+function storeSession(value) {
+  try {
+    if (value) localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(value));
+    else localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch (error) {
+    // Storage can be blocked; the simulation still works until the page is closed.
+  }
+}
+
+// Runs requests one after another: when the server keeps no state, each one must start from the previous result.
+function request(path, body) {
+  pending += 1;
+  const result = queue.then(() => execute(path, body));
+  queue = result.then(() => { pending -= 1; }, () => { pending -= 1; });
+  return result;
+}
+
 // Calls the API (GET when there is no body, POST otherwise) and re-renders with the new snapshot.
-async function request(path, body) {
-  const options = body === undefined
+async function execute(path, body) {
+  const payload = body !== undefined && serverSession ? { ...body, session: serverSession } : body;
+  const options = payload === undefined
     ? {}
-    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -60,6 +93,11 @@ async function request(path, body) {
       return;
     }
     showError(null);
+    if (data.session) {
+      serverSession = data.session;
+      storeSession(serverSession);
+    }
+    delete data.session;
     trackChanges(state, data);
     state = data;
     render();
@@ -501,7 +539,9 @@ function render() {
 function toggleAuto() {
   const enabled = autoTimer === null;
   if (enabled) {
-    autoTimer = setInterval(() => send("/api/time", { ms: AUTO_STEP_MS }), AUTO_STEP_MS);
+    autoTimer = setInterval(() => {
+      if (pending === 0) send("/api/time", { ms: AUTO_STEP_MS });
+    }, AUTO_STEP_MS);
   } else {
     clearInterval(autoTimer);
     autoTimer = null;
@@ -570,5 +610,19 @@ document.querySelectorAll("[data-lang]").forEach((button) => {
 });
 
 applyTranslations();
+// Starts from the saved simulation when there is one; a saved state that no longer validates is dropped.
+async function start() {
+  serverSession = loadStoredSession();
+  if (serverSession) {
+    await request("/api/sync", {});
+    if (currentError && currentError.code === "invalid_session") {
+      serverSession = null;
+      storeSession(null);
+      showError(null);
+    }
+  }
+  if (!state) await request("/api/state");
+}
+
 syncThemeButton();
-request("/api/state");
+start();

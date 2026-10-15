@@ -97,6 +97,7 @@ const TRANSLATIONS = {
     "error.not_found": "Not found",
     "error.internal_error": "The server hit an unexpected error. Check the terminal where it is running",
     "error.timeout": "The server took too long to answer",
+    "error.invalid_session": "The saved simulation is not valid. Use Reset simulation to start again",
   },
 
   es: {
@@ -192,6 +193,7 @@ const TRANSLATIONS = {
     "error.not_found": "No encontrado",
     "error.internal_error": "El servidor tuvo un error inesperado. Revisa la terminal donde está corriendo",
     "error.timeout": "El servidor tardó demasiado en responder",
+    "error.invalid_session": "La simulación guardada no es válida. Usa Reiniciar simulación para empezar de nuevo",
   },
 };
 
