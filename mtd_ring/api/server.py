@@ -14,12 +14,13 @@ WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
 MAX_BODY_BYTES = 4096
 
 
+# A client error that maps to an HTTP 400 response.
 class ApiError(Exception):
-    """A client error that maps to an HTTP 400 response."""
+    pass
 
 
+# Translates JSON requests into controller calls; the lock keeps it thread-safe.
 class RingApi:
-    """Translates JSON requests into ``MTDController`` calls. Thread-safe."""
 
     def __init__(self, controller: MTDController) -> None:
         self._controller = controller
