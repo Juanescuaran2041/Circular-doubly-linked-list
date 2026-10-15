@@ -50,7 +50,30 @@ class HoneypotRing:
 
         Raise ``RingError`` if the id already exists.
         """
-        raise NotImplementedError
+        if honeypot_id in self._index:
+            raise RingError(f"Duplicate honeypot id: {honeypot_id}")
+
+        node = HoneypotNode(honeypot_id)
+
+        if self._head is None:
+            # First node: it is both head and tail, so it points to itself both ways.
+            node.next = node
+            node.prev = node
+            self._head = node
+        else:
+            # "Before the head" in a circle is the same place as "after the tail".
+            head = self._head
+            tail = head.prev
+            # 1) Point the new node at its two future neighbors...
+            node.prev = tail
+            node.next = head
+            # 2) ...then make those neighbors point back at it.
+            tail.next = node
+            head.prev = node
+
+        self._size += 1
+        self._index[honeypot_id] = node
+        return node
 
     def get(self, honeypot_id: str) -> HoneypotNode:
         """Return the node with that id in O(1). Raise ``RingError`` if unknown."""
