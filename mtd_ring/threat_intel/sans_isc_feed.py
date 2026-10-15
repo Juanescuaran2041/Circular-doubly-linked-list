@@ -47,6 +47,8 @@ class SansIscFeed:
     # Describes where the current attackers come from, for the UI.
     @property
     def source(self) -> str:
+        if self._expires_at is None:
+            return "SANS ISC DShield (not loaded yet)"
         if self._live:
             return f"SANS ISC DShield, top {len(self._attackers)} attacking IPs"
         return "Offline sample (SANS ISC could not be reached)"

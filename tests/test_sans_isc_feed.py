@@ -24,6 +24,10 @@ class SansIscFeedTest(unittest.TestCase):
         self.assertEqual(attackers[0].reports, 319739)
         self.assertIn("SANS ISC DShield", feed.source)
 
+    def test_reports_that_nothing_is_loaded_before_the_first_request(self):
+        feed = SansIscFeed(fetch_json=lambda url: SAMPLE)
+        self.assertIn("not loaded yet", feed.source)
+
     def test_parses_a_dictionary_keyed_by_position(self):
         feed = SansIscFeed(fetch_json=lambda url: {"0": SAMPLE[0], "1": SAMPLE[1], "date": "2026-10-15"})
         self.assertEqual(len(feed.attackers()), 2)
