@@ -3,7 +3,9 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 const CENTER = 300;
 const RING_RADIUS = 220;
-const AUTO_STEP_MS = 1000;
+const AUTO_TICK_MS = 1000;
+const SPEED_STORAGE_KEY = "mirage-speed";
+const SPEEDS = [1, 5, 10, 30];
 const FEED_LIMIT = 40;
 const MAX_PIPS = 6;
 const REQUEST_TIMEOUT_MS = 12000;
@@ -36,14 +38,14 @@ const ui = {
 
 let state = null;
 let selectedId = null;
-let autoTimer = null;
 let lastExposedId = null;
 let activityResetPending = false;
 let currentError = null;
 let loadingPoll = null;
 let serverSession = null;
 let queue = Promise.resolve();
-let pending = 0;
+let autoRunning = false;
+let speed = 5;
 
 const session = { attacks: 0, rotations: 0, feed: [], pendingHits: [], pendingMisses: [], lastEventId: 0 };
 
@@ -71,9 +73,8 @@ function storeSession(value) {
 
 // Runs requests one after another: when the server keeps no state, each one must start from the previous result.
 function request(path, body) {
-  pending += 1;
   const result = queue.then(() => execute(path, body));
-  queue = result.then(() => { pending -= 1; }, () => { pending -= 1; });
+  queue = result.catch(() => {});
   return result;
 }
 
@@ -536,17 +537,69 @@ function render() {
 
 /* ---------- Controls ---------- */
 
-function toggleAuto() {
-  const enabled = autoTimer === null;
-  if (enabled) {
-    autoTimer = setInterval(() => {
-      if (pending === 0) send("/api/time", { ms: AUTO_STEP_MS });
-    }, AUTO_STEP_MS);
-  } else {
-    clearInterval(autoTimer);
-    autoTimer = null;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The button shows what a click will do: start the simulation or pause it.
+function syncAutoButton() {
+  ui.auto.textContent = t(autoRunning ? "auto.pause" : "auto.button");
+  ui.auto.setAttribute("aria-pressed", String(autoRunning));
+}
+
+// Highlights the chosen speed.
+function syncSpeedButtons() {
+  document.querySelectorAll("[data-speed]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(Number(button.dataset.speed) === speed));
+  });
+}
+
+function setSpeed(next) {
+  if (!SPEEDS.includes(next)) return;
+  speed = next;
+  try {
+    localStorage.setItem(SPEED_STORAGE_KEY, String(next));
+  } catch (error) {
+    // Storage can be blocked; the speed still applies for this visit.
   }
-  ui.auto.setAttribute("aria-pressed", String(enabled));
+  syncSpeedButtons();
+}
+
+function loadSpeed() {
+  try {
+    const saved = Number(localStorage.getItem(SPEED_STORAGE_KEY));
+    if (SPEEDS.includes(saved)) speed = saved;
+  } catch (error) {
+    // Storage can be blocked; keep the default speed.
+  }
+}
+
+function stopAuto() {
+  autoRunning = false;
+  syncAutoButton();
+}
+
+// Advances the simulation about once per real second. The jump follows the real time that passed,
+// so a slow server does not slow the simulation down, and it stops if the server fails.
+async function autoLoop() {
+  let last = performance.now();
+  while (autoRunning) {
+    await sleep(AUTO_TICK_MS);
+    if (!autoRunning) break;
+    const now = performance.now();
+    const realSeconds = Math.max(1, Math.round((now - last) / 1000));
+    last = now;
+    await send("/api/time", { ms: realSeconds * speed * 1000 });
+    if (currentError) stopAuto();
+  }
+}
+
+function toggleAuto() {
+  if (autoRunning) {
+    stopAuto();
+    return;
+  }
+  autoRunning = true;
+  syncAutoButton();
+  autoLoop();
 }
 
 /* ---------- Theme and language ---------- */
@@ -574,6 +627,7 @@ function toggleTheme() {
 function changeLanguage(next) {
   setLanguage(next);
   syncThemeButton();
+  syncAutoButton();
   renderError();
   render();
 }
@@ -605,6 +659,9 @@ bind("btn-reset", () => {
   activityResetPending = true;
   send("/api/reset");
 });
+document.querySelectorAll("[data-speed]").forEach((button) => {
+  button.addEventListener("click", () => setSpeed(Number(button.dataset.speed)));
+});
 document.querySelectorAll("[data-lang]").forEach((button) => {
   button.addEventListener("click", () => changeLanguage(button.dataset.lang));
 });
@@ -624,5 +681,8 @@ async function start() {
   if (!state) await request("/api/state");
 }
 
+loadSpeed();
+syncSpeedButtons();
+syncAutoButton();
 syncThemeButton();
 start();

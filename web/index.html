@@ -45,7 +45,7 @@
           <path d="M20.2 14.6A8.4 8.4 0 0 1 9.4 3.8a8.4 8.4 0 1 0 10.8 10.8z"/>
         </svg>
       </button>
-      <button id="btn-auto" type="button" class="toggle" aria-pressed="false" data-i18n="auto.button">Run automatically</button>
+      <button id="btn-auto" type="button" class="toggle" aria-pressed="false">Run automatically</button>
     </div>
   </header>
 
@@ -78,6 +78,13 @@
         <div class="actions">
           <button id="btn-time-10" type="button" data-i18n="rotation.wait10">Wait 10 s</button>
           <button id="btn-time-30" type="button" data-i18n="rotation.wait30">Wait 30 s</button>
+        </div>
+        <p class="field-label" id="speed-label" data-i18n="speed.label">Automatic speed</p>
+        <div class="actions speed" role="group" aria-labelledby="speed-label">
+          <button type="button" data-speed="1" aria-pressed="false">1&times;</button>
+          <button type="button" data-speed="5" aria-pressed="true">5&times;</button>
+          <button type="button" data-speed="10" aria-pressed="false">10&times;</button>
+          <button type="button" data-speed="30" aria-pressed="false">30&times;</button>
         </div>
       </section>
 

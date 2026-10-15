@@ -259,6 +259,8 @@ ol, ul { list-style: none; }
 .meter span { display: block; height: 100%; width: 0; background: var(--rose); border-radius: 3px; transition: width 0.3s; }
 /* Every button in a row gets the same width; a row that cannot fit side by side stacks at full width. */
 .actions { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.field-label { color: var(--mist-dim); font-size: 0.8125rem; margin-top: 4px; }
+.speed button[aria-pressed="true"] { color: var(--on-primary); background: var(--primary-bg); border-color: var(--primary-bg); font-weight: 600; }
 .actions.stack { grid-auto-flow: row; grid-auto-columns: auto; }
 
 button {
