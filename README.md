@@ -75,8 +75,24 @@ Requires Python 3.9 or higher. There are no dependencies to install.
 
 ```bash
 python main.py
-# open http://127.0.0.1:8000
 ```
+
+The server prints its address and opens the browser. Options:
+
+| Option | Effect |
+|---|---|
+| `--port 9000` | Preferred port (default `8000`) |
+| `--host 127.0.0.1` | Address to listen on |
+| `--no-browser` | Do not open the browser automatically |
+
+If the preferred port is taken, or Windows reserves it, the server uses the next free one and says so in the terminal. Always open the address it prints.
+
+### If something does not work
+
+- **The page does not open:** use the exact address printed in the terminal. Opening `web/index.html` directly from the file explorer does not work because the page needs the server.
+- **The page looks unstyled or old:** stop any other `python main.py` that is still running, start it again and reload the page with `Ctrl+F5`.
+- **The Real attackers switch stays on "loading":** the server could not reach `isc.sans.edu` yet. It keeps trying in the background and falls back to an offline sample after the timeout, so nothing else freezes.
+- **An error says the server hit an unexpected error:** the full traceback is printed in the terminal where `python main.py` is running.
 
 Tests:
 
