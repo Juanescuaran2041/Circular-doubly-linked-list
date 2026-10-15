@@ -21,6 +21,7 @@ const ui = {
 let state = null;
 let selectedId = null;
 let autoTimer = null;
+let lastExposedId = null;
 
 /* ---------- API ---------- */
 
@@ -156,6 +157,27 @@ function drawCenter() {
   ui.ring.append(title, caption);
 }
 
+// Sweeps a glowing stroke along the ring from the previous exposed server to the new one.
+function drawTrail(nodes) {
+  const exposedId = state.exposed_id;
+  const previousId = lastExposedId;
+  lastExposedId = exposedId;
+  if (!previousId || !exposedId || previousId === exposedId) return;
+
+  const from = nodes.findIndex((node) => node.id === previousId);
+  const to = nodes.findIndex((node) => node.id === exposedId);
+  if (from < 0 || to < 0) return;
+
+  const total = nodes.length;
+  const forward = (to - from + total) % total <= total / 2;
+  const trail = svgElement("path", {
+    d: arcPath(angleOf(from, total), angleOf(to, total), RING_RADIUS, forward),
+    class: "trail",
+    pathLength: 1,
+  });
+  ui.ring.appendChild(trail);
+}
+
 function renderRing() {
   const nodes = state.honeypots;
   const size = nodeSize(nodes.length);
@@ -174,6 +196,7 @@ function renderRing() {
   }
 
   drawLinks(nodes.length, size);
+  drawTrail(nodes);
   nodes.forEach((node, index) => drawNode(node, index, nodes.length, size));
   drawCenter();
 }

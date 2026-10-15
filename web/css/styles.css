@@ -100,7 +100,22 @@ ol, ul { list-style: none; }
 .center-id { font-family: var(--font-display); font-size: 54px; font-weight: 700; text-anchor: middle; fill: var(--cyan); }
 .center-line { font-size: 15px; text-anchor: middle; fill: var(--mist-dim); font-variant-numeric: tabular-nums; }
 
-.trail { fill: none; stroke: var(--cyan); stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 0 8px var(--violet)); opacity: 0; }
+.trail {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  filter: drop-shadow(0 0 8px var(--violet));
+  pointer-events: none;
+  animation: trail-sweep 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes trail-sweep {
+  0% { stroke-dashoffset: 1; opacity: 1; }
+  65% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
 
 /* Control rail */
 .rail {
@@ -182,4 +197,5 @@ button.danger:hover:not(:disabled) { background: rgba(251, 113, 133, 0.2); borde
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
+  .trail { display: none; }
 }
