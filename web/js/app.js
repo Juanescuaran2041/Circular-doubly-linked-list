@@ -6,6 +6,8 @@ const RING_RADIUS = 220;
 const AUTO_STEP_MS = 1000;
 const FEED_LIMIT = 40;
 const MAX_PIPS = 6;
+const REQUEST_TIMEOUT_MS = 12000;
+const LOADING_POLL_MS = 1500;
 
 const ui = {
   ring: document.getElementById("ring"),
@@ -23,11 +25,11 @@ const ui = {
   feedEmpty: document.getElementById("feed-empty"),
   statAttacks: document.getElementById("stat-attacks"),
   statMissed: document.getElementById("stat-missed"),
-  threatsButton: document.getElementById("btn-threats"),
-  threatSource: document.getElementById("threat-source"),
   statRotations: document.getElementById("stat-rotations"),
   statIsolated: document.getElementById("stat-isolated"),
   statServers: document.getElementById("stat-servers"),
+  threatsButton: document.getElementById("btn-threats"),
+  threatSource: document.getElementById("threat-source"),
   selectionButtons: ["btn-attack", "btn-isolate", "btn-remove"].map((id) => document.getElementById(id)),
 };
 
@@ -36,9 +38,10 @@ let selectedId = null;
 let autoTimer = null;
 let lastExposedId = null;
 let activityResetPending = false;
+let currentError = null;
+let loadingPoll = null;
 
 const session = { attacks: 0, rotations: 0, feed: [], pendingHits: [], pendingMisses: [], lastEventId: 0 };
-const DEFAULT_THREAT_HINT = "Replays the top attacking IPs reported to SANS ISC DShield while time runs.";
 
 /* ---------- API ---------- */
 
@@ -47,33 +50,50 @@ async function request(path, body) {
   const options = body === undefined
     ? {}
     : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(path, options);
+    const response = await fetch(path, { ...options, signal: controller.signal });
     const data = await response.json();
     if (!response.ok) {
-      showError(data.error || `Request failed (${response.status})`);
+      showError({ code: data.code, params: data.params, fallback: data.error, status: response.status });
       return;
     }
-    showError("");
+    showError(null);
     trackChanges(state, data);
     state = data;
     render();
   } catch (error) {
-    showError("Cannot reach the server. Is `python main.py` running?");
+    showError({ code: error.name === "AbortError" ? "timeout" : "network" });
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 const send = (path, body = {}) => request(path, body);
 
-function showError(message) {
-  ui.error.textContent = message;
-  ui.error.hidden = !message;
+// Remembers the error (not its text) so it can be translated again when the language changes.
+function showError(error) {
+  currentError = error;
+  renderError();
+}
+
+function renderError() {
+  ui.error.hidden = !currentError;
+  if (!currentError) return;
+  const { code, params, fallback, status } = currentError;
+  const key = `error.${code}`;
+  const known = TRANSLATIONS[language][key] !== undefined;
+  ui.error.textContent = known
+    ? t(key, params || {})
+    : fallback || t("error.request", { status: status ?? "?" });
 }
 
 /* ---------- Activity derived from consecutive snapshots ---------- */
 
-function logEvent(time, kind, text, detail = "") {
-  session.feed.unshift({ time, kind, text, detail });
+// Feed entries keep a translation key and its values, so they follow the language.
+function logEvent(time, kind, key, params = {}, detail = null) {
+  session.feed.unshift({ time, kind, key, params, detail });
   session.feed.length = Math.min(session.feed.length, FEED_LIMIT);
 }
 
@@ -99,14 +119,14 @@ function trackThreats(current) {
 
   const struck = new Set();
   for (const event of fresh) {
-    const detail = `Reported ${event.reports.toLocaleString("en-US")} times by SANS ISC sensors`;
+    const detail = { key: "feed.reports", params: { n: event.reports } };
     if (event.outcome === "landed") {
       struck.add(event.target);
       session.attacks += 1;
-      logEvent(event.time_ms, "attack", `${event.ip} struck ${event.target}`, detail);
+      logEvent(event.time_ms, "attack", "feed.struck", { ip: event.ip, target: event.target }, detail);
     } else {
       session.pendingMisses.push(event.target);
-      logEvent(event.time_ms, "miss", `${event.ip} aimed at ${event.target}, which had already rotated away`, detail);
+      logEvent(event.time_ms, "miss", "feed.missed", { ip: event.ip, target: event.target }, detail);
     }
   }
   return struck;
@@ -130,36 +150,39 @@ function trackChanges(previous, current) {
   for (const [id, node] of after) {
     const old = before.get(id);
     if (!old) {
-      logEvent(time, "ring", `${id} joined the ring`);
+      logEvent(time, "ring", "feed.joined", { id });
       continue;
     }
     if (node.attacks > old.attacks) {
       session.pendingHits.push(id);
       if (!covered.has(id)) {
         session.attacks += node.attacks - old.attacks;
-        logEvent(time, "attack", `${id} was attacked (${node.attacks} of ${current.config.attack_threshold})`);
+        logEvent(time, "attack", "feed.attacked", {
+          id, attacks: node.attacks, threshold: current.config.attack_threshold,
+        });
       }
     }
     if (node.state === "ISOLATED" && old.state !== "ISOLATED") {
-      logEvent(time, "isolate", `${id} moved to quarantine`);
+      logEvent(time, "isolate", "feed.quarantined", { id });
     }
     if (old.state === "ISOLATED" && node.state !== "ISOLATED") {
-      logEvent(time, "release", `${id} left quarantine`);
+      logEvent(time, "release", "feed.released", { id });
     }
   }
   for (const id of before.keys()) {
-    if (!after.has(id)) logEvent(time, "ring", `${id} was removed`);
+    if (!after.has(id)) logEvent(time, "ring", "feed.removed", { id });
   }
+
   const moves = appendedCount(previous.history, current.history);
   if (current.exposed_id && moves > 0) {
     session.rotations += moves;
-    logEvent(
-      time,
-      "rotate",
-      moves === 1
-        ? `Exposure moved from ${previous.exposed_id || "nowhere"} to ${current.exposed_id}`
-        : `Exposure moved ${moves} times and now sits on ${current.exposed_id}`,
-    );
+    if (moves > 1) {
+      logEvent(time, "rotate", "feed.movedMany", { n: moves, to: current.exposed_id });
+    } else if (previous.exposed_id) {
+      logEvent(time, "rotate", "feed.moved", { from: previous.exposed_id, to: current.exposed_id });
+    } else {
+      logEvent(time, "rotate", "feed.movedFromNone", { to: current.exposed_id });
+    }
   }
 }
 
@@ -271,7 +294,7 @@ function drawTrail(nodes) {
 
 // A slow ripple leaving the exposed server.
 function drawRipple(node, index, total, size) {
-  if (!node.state || node.state !== "EXPOSED") return;
+  if (node.state !== "EXPOSED") return;
   const { x, y } = pointAt(angleOf(index, total));
   ui.ring.appendChild(svgElement("polygon", { points: hexagonPoints(x, y, size), class: "ripple" }));
 }
@@ -304,16 +327,19 @@ function drawNode(node, index, total, size, struck) {
   if (node.id === selectedId) classes.push("selected");
   if (struck) classes.push("hit");
 
+  const stateLabel = t(`state.${node.state}`).toLowerCase();
   const group = svgElement("g", {
     class: classes.join(" "), tabindex: 0, role: "button",
-    "aria-label": `${node.id}, ${node.state.toLowerCase()}${node.id === selectedId ? ", selected" : ""}`,
+    "aria-label": `${node.id}, ${stateLabel}${node.id === selectedId ? `, ${t("node.selected")}` : ""}`,
   });
   group.appendChild(svgElement("polygon", { points: hexagonPoints(x, y, size), class: "node-shape" }));
 
   const label = svgElement("text", { x, y: y - 1, class: "node-id" });
   label.textContent = node.id;
   const detail = svgElement("text", { x, y: y + 15, class: "node-sub" });
-  detail.textContent = node.state === "ISOLATED" ? seconds(node.quarantine_left_ms) : `${node.attacks} hits`;
+  detail.textContent = node.state === "ISOLATED"
+    ? seconds(node.quarantine_left_ms)
+    : t("node.hits", { n: node.attacks });
   group.append(label, detail);
 
   const toggleSelection = () => {
@@ -334,11 +360,11 @@ function drawNode(node, index, total, size, struck) {
 
 function drawCenter() {
   const title = svgElement("text", { x: CENTER, y: CENTER + 8, class: "center-id" });
-  title.textContent = state.exposed_id || "No target";
+  title.textContent = state.exposed_id || t("center.none");
   const caption = svgElement("text", { x: CENTER, y: CENTER + 40, class: "center-line" });
   caption.textContent = state.exposed_id
-    ? `exposed, moves in ${seconds(state.next_rotation_in_ms)}`
-    : "nothing is exposed right now";
+    ? t("center.exposed", { time: seconds(state.next_rotation_in_ms) })
+    : t("center.nothing");
   ui.ring.append(title, caption);
 }
 
@@ -357,7 +383,7 @@ function renderRing() {
 
   if (nodes.length === 0) {
     const empty = svgElement("text", { x: CENTER, y: CENTER, class: "center-line" });
-    empty.textContent = "The ring is empty. Add a honeypot to start.";
+    empty.textContent = t("ring.empty");
     ui.ring.appendChild(empty);
     return;
   }
@@ -377,17 +403,32 @@ function renderRing() {
 
 /* ---------- Side panels ---------- */
 
+// Describes where the attackers come from, in the current language.
+function sourceText(threats) {
+  return t(`source.${threats.source_kind}`, { n: threats.source_count });
+}
+
+// While the server loads the attacker list, ask again shortly so the interface leaves the loading state.
+function scheduleLoadingRefresh() {
+  const loading = state && state.threats && state.threats.enabled && state.threats.source_kind === "loading";
+  if (!loading || loadingPoll !== null) return;
+  loadingPoll = setTimeout(() => {
+    loadingPoll = null;
+    request("/api/state");
+  }, LOADING_POLL_MS);
+}
+
 function renderStats() {
-  const threats = state.threats || { enabled: false, missed: 0, source: "" };
-  ui.statAttacks.textContent = session.attacks;
-  ui.statMissed.textContent = threats.missed;
-  ui.threatsButton.setAttribute("aria-pressed", String(threats.enabled));
-  ui.threatSource.textContent = threats.enabled
-    ? `Source: ${threats.source}. Attacks arrive while time runs.`
-    : DEFAULT_THREAT_HINT;
-  ui.statRotations.textContent = session.rotations;
+  const threats = state.threats || { enabled: false, missed: 0, source_kind: "pending", source_count: 0 };
+  ui.statAttacks.textContent = session.attacks.toLocaleString(language);
+  ui.statMissed.textContent = threats.missed.toLocaleString(language);
+  ui.statRotations.textContent = session.rotations.toLocaleString(language);
   ui.statIsolated.textContent = state.honeypots.filter((node) => node.state === "ISOLATED").length;
   ui.statServers.textContent = state.honeypots.length;
+  ui.threatsButton.setAttribute("aria-pressed", String(threats.enabled));
+  ui.threatSource.textContent = threats.enabled
+    ? t("threats.active", { source: sourceText(threats) })
+    : t("threats.hint");
 }
 
 function renderSelected() {
@@ -399,12 +440,13 @@ function renderSelected() {
 
   ui.selectedName.textContent = node.id;
   if (node.state === "ISOLATED") {
-    ui.selectedMeta.textContent = `Isolated, back in ${seconds(node.quarantine_left_ms)}`;
+    ui.selectedMeta.textContent = t("selected.isolated", { time: seconds(node.quarantine_left_ms) });
     ui.selectedMeter.style.width = `${(node.quarantine_left_ms / state.config.quarantine_ms) * 100}%`;
     ui.selectedMeter.style.background = "var(--amber)";
   } else {
-    const label = node.state === "EXPOSED" ? "Exposed" : "Waiting";
-    ui.selectedMeta.textContent = `${label}, ${node.attacks} of ${state.config.attack_threshold} attacks`;
+    ui.selectedMeta.textContent = t("selected.status", {
+      state: t(`state.${node.state}`), attacks: node.attacks, threshold: state.config.attack_threshold,
+    });
     ui.selectedMeter.style.width = `${Math.min(100, (node.attacks / state.config.attack_threshold) * 100)}%`;
     ui.selectedMeter.style.background = "var(--rose)";
   }
@@ -418,11 +460,11 @@ function renderFeed() {
     const time = document.createElement("time");
     time.textContent = clockText(entry.time);
     const text = document.createElement("span");
-    text.textContent = entry.text;
+    text.textContent = t(entry.key, entry.params);
     if (entry.detail) {
       const detail = document.createElement("span");
       detail.className = "detail";
-      detail.textContent = entry.detail;
+      detail.textContent = t(entry.detail.key, entry.detail.params);
       text.appendChild(detail);
     }
     item.append(time, text);
@@ -451,6 +493,7 @@ function render() {
   renderSelected();
   renderFeed();
   renderHistory();
+  scheduleLoadingRefresh();
 }
 
 /* ---------- Controls ---------- */
@@ -466,12 +509,12 @@ function toggleAuto() {
   ui.auto.setAttribute("aria-pressed", String(enabled));
 }
 
-/* ---------- Theme ---------- */
+/* ---------- Theme and language ---------- */
 
 // The icon button describes the action it will perform, not the current theme.
 function syncThemeButton() {
   const isLight = document.documentElement.getAttribute("data-theme") === "light";
-  const label = isLight ? "Switch to dark mode" : "Switch to light mode";
+  const label = t(isLight ? "theme.toDark" : "theme.toLight");
   ui.theme.setAttribute("aria-label", label);
   ui.theme.title = label;
 }
@@ -487,6 +530,14 @@ function toggleTheme() {
   syncThemeButton();
 }
 
+// Applies a language to the static texts and to everything drawn from the state.
+function changeLanguage(next) {
+  setLanguage(next);
+  syncThemeButton();
+  renderError();
+  render();
+}
+
 function bind(id, handler) {
   document.getElementById(id).addEventListener("click", handler);
 }
@@ -499,8 +550,11 @@ bind("btn-auto", toggleAuto);
 bind("btn-theme", toggleTheme);
 bind("btn-threats", async () => {
   ui.threatsButton.disabled = true;
-  await send("/api/threats", { enabled: !(state && state.threats && state.threats.enabled) });
-  ui.threatsButton.disabled = false;
+  try {
+    await send("/api/threats", { enabled: !(state && state.threats && state.threats.enabled) });
+  } finally {
+    ui.threatsButton.disabled = false;
+  }
 });
 bind("btn-attack", () => selectedId && send("/api/attack", { id: selectedId }));
 bind("btn-isolate", () => selectedId && send("/api/isolate", { id: selectedId }));
@@ -511,6 +565,10 @@ bind("btn-reset", () => {
   activityResetPending = true;
   send("/api/reset");
 });
+document.querySelectorAll("[data-lang]").forEach((button) => {
+  button.addEventListener("click", () => changeLanguage(button.dataset.lang));
+});
 
+applyTranslations();
 syncThemeButton();
 request("/api/state");

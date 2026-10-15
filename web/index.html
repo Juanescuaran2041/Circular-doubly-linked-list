@@ -26,12 +26,16 @@
       <img src="/assets/logo.png" alt="" width="48" height="48">
       <div>
         <h1>Mirage Ring</h1>
-        <p>A moving target of honeypots</p>
+        <p data-i18n="brand.tagline">A moving target of honeypots</p>
       </div>
     </div>
     <div class="clock">
       <span class="clock-value" id="clock">00:00</span>
-      <span class="clock-caption">simulated time</span>
+      <span class="clock-caption" data-i18n="clock.caption">simulated time</span>
+      <div class="lang-switch" role="group" aria-label="Language" data-i18n-aria-label="lang.group">
+        <button type="button" data-lang="en" lang="en" aria-label="English" aria-pressed="true">EN</button>
+        <button type="button" data-lang="es" lang="es" aria-label="Español" aria-pressed="false">ES</button>
+      </div>
       <button id="btn-theme" type="button" class="icon-button" aria-label="Switch to light mode" title="Switch to light mode">
         <svg class="icon icon-sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
           <circle cx="12" cy="12" r="4.2"/>
@@ -41,88 +45,89 @@
           <path d="M20.2 14.6A8.4 8.4 0 0 1 9.4 3.8a8.4 8.4 0 1 0 10.8 10.8z"/>
         </svg>
       </button>
-      <button id="btn-auto" type="button" class="toggle" aria-pressed="false">Run automatically</button>
+      <button id="btn-auto" type="button" class="toggle" aria-pressed="false" data-i18n="auto.button">Run automatically</button>
     </div>
   </header>
 
   <main class="workspace">
-    <section class="stage" aria-label="Honeypot ring">
+    <section class="stage" aria-label="Honeypot ring" data-i18n-aria-label="stage.label">
       <dl class="stats">
-        <div><dt>Attacks absorbed</dt><dd id="stat-attacks" class="hot">0</dd></div>
-        <div><dt>Missed by rotation</dt><dd id="stat-missed" class="good">0</dd></div>
-        <div><dt>Rotations</dt><dd id="stat-rotations">0</dd></div>
-        <div><dt>In quarantine</dt><dd id="stat-isolated">0</dd></div>
-        <div><dt>Servers in ring</dt><dd id="stat-servers">0</dd></div>
+        <div><dt data-i18n="stat.attacks">Attacks absorbed</dt><dd id="stat-attacks" class="hot">0</dd></div>
+        <div><dt data-i18n="stat.missed">Missed by rotation</dt><dd id="stat-missed" class="good">0</dd></div>
+        <div><dt data-i18n="stat.rotations">Rotations</dt><dd id="stat-rotations">0</dd></div>
+        <div><dt data-i18n="stat.isolated">In quarantine</dt><dd id="stat-isolated">0</dd></div>
+        <div><dt data-i18n="stat.servers">Servers in ring</dt><dd id="stat-servers">0</dd></div>
       </dl>
-      <svg id="ring" viewBox="0 0 600 600" role="img" aria-label="Circular ring of honeypots"></svg>
+      <svg id="ring" viewBox="0 0 600 600" role="img" aria-label="Circular ring of honeypots" data-i18n-aria-label="ring.aria"></svg>
       <ul class="legend">
-        <li><span class="swatch exposed"></span>Exposed</li>
-        <li><span class="swatch waiting"></span>Waiting</li>
-        <li><span class="swatch isolated"></span>Isolated</li>
-        <li><span class="line next"></span>next</li>
-        <li><span class="line prev"></span>prev</li>
+        <li><span class="swatch exposed"></span><span data-i18n="legend.exposed">Exposed</span></li>
+        <li><span class="swatch waiting"></span><span data-i18n="legend.waiting">Waiting</span></li>
+        <li><span class="swatch isolated"></span><span data-i18n="legend.isolated">Isolated</span></li>
+        <li><span class="line next"></span><span data-i18n="legend.next">next</span></li>
+        <li><span class="line prev"></span><span data-i18n="legend.prev">prev</span></li>
       </ul>
     </section>
 
     <aside class="rail">
       <section class="block" aria-labelledby="rotation-title">
-        <h2 id="rotation-title">Rotation</h2>
+        <h2 id="rotation-title" data-i18n="rotation.title">Rotation</h2>
         <div class="actions">
-          <button id="btn-back" type="button">Step back</button>
-          <button id="btn-rotate" type="button" class="primary">Rotate</button>
+          <button id="btn-back" type="button" data-i18n="rotation.back">Step back</button>
+          <button id="btn-rotate" type="button" class="primary" data-i18n="rotation.forward">Rotate</button>
         </div>
         <div class="actions">
-          <button id="btn-time-10" type="button">Wait 10 s</button>
-          <button id="btn-time-30" type="button">Wait 30 s</button>
+          <button id="btn-time-10" type="button" data-i18n="rotation.wait10">Wait 10 s</button>
+          <button id="btn-time-30" type="button" data-i18n="rotation.wait30">Wait 30 s</button>
         </div>
       </section>
 
       <section class="block" aria-labelledby="selected-title">
-        <h2 id="selected-title">Selected server</h2>
-        <p id="selected-empty" class="hint">Select a server on the ring to attack, isolate or remove it.</p>
+        <h2 id="selected-title" data-i18n="selected.title">Selected server</h2>
+        <p id="selected-empty" class="hint" data-i18n="selected.hint">Select a server on the ring to attack, isolate or remove it.</p>
         <div id="selected-detail" hidden>
           <p class="selected-name" id="selected-name"></p>
           <p class="selected-meta" id="selected-meta"></p>
           <div class="meter" aria-hidden="true"><span id="selected-meter"></span></div>
         </div>
         <div class="actions">
-          <button id="btn-attack" type="button" class="danger" disabled>Attack</button>
-          <button id="btn-isolate" type="button" disabled>Isolate</button>
-          <button id="btn-remove" type="button" disabled>Remove</button>
+          <button id="btn-attack" type="button" class="danger" disabled data-i18n="selected.attack">Attack</button>
+          <button id="btn-isolate" type="button" disabled data-i18n="selected.isolate">Isolate</button>
+          <button id="btn-remove" type="button" disabled data-i18n="selected.remove">Remove</button>
         </div>
       </section>
 
       <section class="block" aria-labelledby="ring-title">
-        <h2 id="ring-title">Ring</h2>
-        <div class="actions">
-          <button id="btn-add" type="button">Add honeypot</button>
-          <button id="btn-reset" type="button">Reset simulation</button>
+        <h2 id="ring-title" data-i18n="ring.title">Ring</h2>
+        <div class="actions stack">
+          <button id="btn-add" type="button" data-i18n="ring.add">Add honeypot</button>
+          <button id="btn-reset" type="button" data-i18n="ring.reset">Reset simulation</button>
         </div>
       </section>
 
       <section class="block" aria-labelledby="threat-title">
-        <h2 id="threat-title">Real attackers</h2>
-        <p id="threat-source" class="hint">Replays the top attacking IPs reported to SANS ISC DShield while time runs.</p>
+        <h2 id="threat-title" data-i18n="threats.title">Real attackers</h2>
+        <p id="threat-source" class="hint" data-i18n="threats.hint">Replays the top attacking IPs reported to SANS ISC DShield while time runs.</p>
         <div class="actions">
-          <button id="btn-threats" type="button" class="toggle" aria-pressed="false">Replay real attackers</button>
+          <button id="btn-threats" type="button" class="toggle" aria-pressed="false" data-i18n="threats.button">Replay real attackers</button>
         </div>
       </section>
 
       <p id="error" class="error" role="alert" hidden></p>
 
       <section class="block activity" aria-labelledby="activity-title">
-        <h2 id="activity-title">Activity</h2>
-        <p id="feed-empty" class="hint">Nothing has happened yet. Attack a server or rotate the ring.</p>
+        <h2 id="activity-title" data-i18n="activity.title">Activity</h2>
+        <p id="feed-empty" class="hint" data-i18n="activity.empty">Nothing has happened yet. Attack a server or rotate the ring.</p>
         <ol id="feed" class="feed" aria-live="polite"></ol>
       </section>
     </aside>
   </main>
 
   <footer class="timeline" aria-labelledby="history-title">
-    <h2 id="history-title">Exposure history</h2>
+    <h2 id="history-title" data-i18n="history.title">Exposure history</h2>
     <ol id="history" class="history"></ol>
   </footer>
 
+  <script src="/js/i18n.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

@@ -67,9 +67,12 @@ class ThreatSimulator:
 
     # Builds the dictionary sent to the frontend.
     def snapshot(self) -> Dict[str, Any]:
+        source_kind, source_count = self._feed.status
         return {
             "enabled": self._enabled,
             "source": self._feed.source,
+            "source_kind": source_kind,
+            "source_count": source_count,
             "landed": self._landed,
             "missed": self._missed,
             "events": [event.to_dict() for event in list(self._events)[-EVENTS_SENT:]],

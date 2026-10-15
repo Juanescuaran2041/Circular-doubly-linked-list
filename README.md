@@ -54,6 +54,7 @@ mtd_ring/
 web/
   index.html                   # page layout
   css/styles.css               # styles
+  js/i18n.js                   # English and Spanish dictionaries and the t() helper
   js/app.js                    # fetches the API and draws the SVG ring
   assets/                      # logo and favicon
 tests/
@@ -74,8 +75,24 @@ Requires Python 3.9 or higher. There are no dependencies to install.
 
 ```bash
 python main.py
-# open http://127.0.0.1:8000
 ```
+
+The server prints its address and opens the browser. Options:
+
+| Option | Effect |
+|---|---|
+| `--port 9000` | Preferred port (default `8000`) |
+| `--host 127.0.0.1` | Address to listen on |
+| `--no-browser` | Do not open the browser automatically |
+
+If the preferred port is taken, or Windows reserves it, the server uses the next free one and says so in the terminal. Always open the address it prints.
+
+### If something does not work
+
+- **The page does not open:** use the exact address printed in the terminal. Opening `web/index.html` directly from the file explorer does not work because the page needs the server.
+- **The page looks unstyled or old:** stop any other `python main.py` that is still running, start it again and reload the page with `Ctrl+F5`.
+- **The Real attackers switch stays on "loading":** the server could not reach `isc.sans.edu` yet. It keeps trying in the background and falls back to an offline sample after the timeout, so nothing else freezes.
+- **An error says the server hit an unexpected error:** the full traceback is printed in the terminal where `python main.py` is running.
 
 Tests:
 
@@ -91,6 +108,7 @@ python -m unittest discover -v
 - Click a server (or focus it and press Enter) to select it, then use **Attack**, **Isolate** or **Remove**.
 - **Rotate** and **Step back**, **Wait 10 s** / **Wait 30 s**, and **Run automatically**.
 - **Add honeypot** and **Reset simulation**, plus a timeline of the most recently exposed servers.
+- **EN / ES** switch for the interface language, and a sun/moon icon for the light and dark themes. Both choices are remembered; the first visit follows the browser.
 
 The clock is **simulated** (controlled by the server), so the demo is reproducible and does not depend on real time.
 
@@ -128,7 +146,15 @@ The clock is **simulated** (controlled by the server), so the demo is reproducib
 | POST | `/api/threats` | `{"enabled": true}` | Turns the real attacker replay on or off |
 
 Every response is the ring snapshot plus a `threats` object (`enabled`, `source`, `landed`, `missed` and the latest `events`).
-Every POST returns the new snapshot. Errors return `400` with `{"error": "..."}`. The snapshot shape is documented in `MTDController.snapshot()`.
+Every POST returns the new snapshot. Errors return `400` with `{"error": "...", "code": "...", "params": {...}}`. The snapshot shape is documented in `MTDController.snapshot()`.
+
+## Languages
+
+The interface is available in English and Spanish. Texts live in `web/js/i18n.js`; the page marks translatable elements with `data-i18n`, and code that builds text at runtime calls `t(key, params)`.
+
+- The server never sends display text to translate: errors carry a stable `code` plus `params` (for example `unknown_honeypot` with `{"id": "HP-3"}`), and the threat feed reports `source_kind` and `source_count`. The English `error` message stays as a fallback.
+- The activity feed stores translation keys and values, not finished sentences, so existing entries change language together with the rest of the page.
+- To add a language, add a dictionary with the same keys to `TRANSLATIONS`, list its code in `SUPPORTED_LANGUAGES` and add a button with `data-lang` to the header.
 
 ## Design decisions
 

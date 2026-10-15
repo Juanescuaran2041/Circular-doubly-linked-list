@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import threading
 import time
 import urllib.request
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Tuple
 
 from mtd_ring.threat_intel.attacker import Attacker
 
@@ -24,7 +25,12 @@ OFFLINE_SAMPLE = [
 ]
 
 
-# Top attacking IPs reported to the SANS ISC DShield honeypot network, cached and with an offline fallback.
+# Runs a task in a background thread so a slow network never blocks the caller.
+def spawn_thread(task: Callable[[], None]) -> None:
+    threading.Thread(target=task, daemon=True).start()
+
+
+# Top attacking IPs reported to the SANS ISC DShield honeypot network, refreshed in the background.
 class SansIscFeed:
 
     def __init__(
@@ -34,44 +40,74 @@ class SansIscFeed:
         timeout_seconds: int = 5,
         fetch_json: Optional[Callable[[str], Any]] = None,
         clock: Callable[[], float] = time.monotonic,
+        spawn: Callable[[Callable[[], None]], None] = spawn_thread,
     ) -> None:
         self._limit = limit
         self._ttl_seconds = ttl_seconds
         self._timeout_seconds = timeout_seconds
         self._fetch_json = fetch_json or self._download_json
         self._clock = clock
+        self._spawn = spawn
+        self._lock = threading.Lock()
         self._attackers: List[Attacker] = []
         self._live = False
+        self._requested = False
+        self._refreshing = False
         self._expires_at: Optional[float] = None
 
-    # Describes where the current attackers come from, for the UI.
+    # Tells where the attackers come from ("pending", "loading", "live" or "offline") and how many there are.
+    @property
+    def status(self) -> Tuple[str, int]:
+        with self._lock:
+            if not self._requested:
+                return "pending", 0
+            if self._expires_at is None:
+                return "loading", 0
+            return ("live" if self._live else "offline"), len(self._attackers)
+
+    # Describes where the current attackers come from, in English.
     @property
     def source(self) -> str:
-        if self._expires_at is None:
-            return "SANS ISC DShield (not loaded yet)"
-        if self._live:
-            return f"SANS ISC DShield, top {len(self._attackers)} attacking IPs"
-        return "Offline sample (SANS ISC could not be reached)"
+        kind, count = self.status
+        if kind == "live":
+            return f"SANS ISC DShield, top {count} attacking IPs"
+        if kind == "offline":
+            return "Offline sample (SANS ISC could not be reached)"
+        if kind == "loading":
+            return "SANS ISC DShield (loading)"
+        return "SANS ISC DShield (not loaded yet)"
 
-    # Returns the attackers, downloading them again only when the cache has expired.
+    # Returns the attackers known right now and starts a background refresh when they are stale.
     def attackers(self) -> List[Attacker]:
-        now = self._clock()
-        if self._expires_at is not None and now < self._expires_at:
-            return self._attackers
+        with self._lock:
+            expired = self._expires_at is None or self._clock() >= self._expires_at
+            start = expired and not self._refreshing
+            if start:
+                self._refreshing = True
+                self._requested = True
+        if start:
+            self._spawn(self._refresh)
+        with self._lock:
+            return list(self._attackers)
 
+    # Downloads the list; any failure keeps the previous list or falls back to the offline sample.
+    def _refresh(self) -> None:
         try:
-            payload = self._fetch_json(URL_TEMPLATE.format(limit=self._limit))
-            parsed = self._parse(payload)
+            parsed = self._parse(self._fetch_json(URL_TEMPLATE.format(limit=self._limit)))
             if not parsed:
                 raise ValueError("empty response")
-            self._attackers = parsed
-            self._live = True
-            self._expires_at = now + self._ttl_seconds
-        except (OSError, ValueError, KeyError, TypeError):
-            if not self._live:
-                self._attackers = list(OFFLINE_SAMPLE)
-            self._expires_at = now + RETRY_AFTER_FAILURE_SECONDS
-        return self._attackers
+            with self._lock:
+                self._attackers = parsed
+                self._live = True
+                self._expires_at = self._clock() + self._ttl_seconds
+        except Exception:
+            with self._lock:
+                if not self._live:
+                    self._attackers = list(OFFLINE_SAMPLE)
+                self._expires_at = self._clock() + RETRY_AFTER_FAILURE_SECONDS
+        finally:
+            with self._lock:
+                self._refreshing = False
 
     # Reads the JSON list from SANS ISC.
     def _download_json(self, url: str) -> Any:
