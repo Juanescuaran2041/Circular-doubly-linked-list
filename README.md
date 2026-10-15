@@ -54,6 +54,7 @@ mtd_ring/
 web/
   index.html                   # page layout
   css/styles.css               # styles
+  js/i18n.js                   # English and Spanish dictionaries and the t() helper
   js/app.js                    # fetches the API and draws the SVG ring
   assets/                      # logo and favicon
 tests/
@@ -91,6 +92,7 @@ python -m unittest discover -v
 - Click a server (or focus it and press Enter) to select it, then use **Attack**, **Isolate** or **Remove**.
 - **Rotate** and **Step back**, **Wait 10 s** / **Wait 30 s**, and **Run automatically**.
 - **Add honeypot** and **Reset simulation**, plus a timeline of the most recently exposed servers.
+- **EN / ES** switch for the interface language, and a sun/moon icon for the light and dark themes. Both choices are remembered; the first visit follows the browser.
 
 The clock is **simulated** (controlled by the server), so the demo is reproducible and does not depend on real time.
 
@@ -128,7 +130,15 @@ The clock is **simulated** (controlled by the server), so the demo is reproducib
 | POST | `/api/threats` | `{"enabled": true}` | Turns the real attacker replay on or off |
 
 Every response is the ring snapshot plus a `threats` object (`enabled`, `source`, `landed`, `missed` and the latest `events`).
-Every POST returns the new snapshot. Errors return `400` with `{"error": "..."}`. The snapshot shape is documented in `MTDController.snapshot()`.
+Every POST returns the new snapshot. Errors return `400` with `{"error": "...", "code": "...", "params": {...}}`. The snapshot shape is documented in `MTDController.snapshot()`.
+
+## Languages
+
+The interface is available in English and Spanish. Texts live in `web/js/i18n.js`; the page marks translatable elements with `data-i18n`, and code that builds text at runtime calls `t(key, params)`.
+
+- The server never sends display text to translate: errors carry a stable `code` plus `params` (for example `unknown_honeypot` with `{"id": "HP-3"}`), and the threat feed reports `source_kind` and `source_count`. The English `error` message stays as a fallback.
+- The activity feed stores translation keys and values, not finished sentences, so existing entries change language together with the rest of the page.
+- To add a language, add a dictionary with the same keys to `TRANSLATIONS`, list its code in `SUPPORTED_LANGUAGES` and add a button with `data-lang` to the header.
 
 ## Design decisions
 
