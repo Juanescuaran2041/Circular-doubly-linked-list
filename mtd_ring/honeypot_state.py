@@ -1,7 +1,8 @@
 from enum import Enum
 
 
+# The three situations a honeypot can be in.
 class HoneypotState(str, Enum):
-    EXPOSED = "EXPOSED"    # the only one visible to the network
-    WAITING = "WAITING"    # in the ring, ready to be exposed
-    ISOLATED = "ISOLATED"  # in quarantine, skipped by the rotation
+    EXPOSED = "EXPOSED"
+    WAITING = "WAITING"
+    ISOLATED = "ISOLATED"

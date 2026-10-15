@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 
 
+# Tunable parameters of the defense; durations are in milliseconds.
 @dataclass(frozen=True)
 class RingConfig:
-    """Tunable parameters of the defense. All durations are in milliseconds."""
-
     rotation_interval_ms: int = 30_000
     attack_threshold: int = 3
     quarantine_ms: int = 60_000
