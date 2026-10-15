@@ -59,11 +59,20 @@ class MTDController:
 
     # Counts an attack, isolating the target at the threshold and rotating if it was exposed.
     def register_attack(self, honeypot_id: str) -> None:
-        raise NotImplementedError
+        node = self._ring.get(honeypot_id)
+        if node.is_isolated():
+            raise RingError(f"{honeypot_id} is isolated and cannot be attacked")
+
+        was_exposed = node.is_exposed()
+        total = node.record_attack()
+        if total >= self._config.attack_threshold:
+            self._isolate_node(node)
+        elif was_exposed:
+            self.rotate(1)
 
     # Puts a honeypot in quarantine by hand.
     def isolate(self, honeypot_id: str) -> None:
-        raise NotImplementedError
+        self._isolate_node(self._ring.get(honeypot_id))
 
     # Permanently removes a honeypot, moving the exposure first if it was the exposed one.
     def remove(self, honeypot_id: str) -> None:
@@ -90,6 +99,13 @@ class MTDController:
     # Sets the clock value at which the automatic rotation is due.
     def _schedule_next_rotation(self) -> None:
         self._next_rotation_at = self._now + self._config.rotation_interval_ms
+
+    # Starts the quarantine of a node and moves the exposure away if it was the exposed one.
+    def _isolate_node(self, node: HoneypotNode) -> None:
+        was_exposed = node.is_exposed()
+        node.isolate(self._now + self._config.quarantine_ms)
+        if was_exposed:
+            self.rotate(1)
 
     # Tells if some node is currently exposed.
     def _has_exposed(self) -> bool:
