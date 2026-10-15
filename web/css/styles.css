@@ -279,6 +279,12 @@ button.danger { color: var(--rose); background: var(--rose-soft); border-color: 
 button.danger:hover:not(:disabled) { background: var(--rose-soft); border-color: var(--rose); }
 .toggle { flex: 0 0 auto; }
 
+.lang-switch { display: inline-flex; flex: 0 0 auto; }
+.lang-switch button { flex: 0 0 auto; min-width: 44px; padding: 0 10px; border-radius: 0; font-weight: 600; }
+.lang-switch button:first-child { border-radius: 8px 0 0 8px; }
+.lang-switch button:last-child { border-radius: 0 8px 8px 0; margin-left: -1px; }
+.lang-switch button[aria-pressed="true"] { color: var(--on-primary); background: var(--primary-bg); border-color: var(--primary-bg); }
+
 .icon-button { flex: 0 0 auto; width: 40px; padding: 0; display: inline-grid; place-items: center; }
 .icon { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .icon-moon { display: none; }
