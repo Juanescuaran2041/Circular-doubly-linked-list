@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Iterator, Optional
+from typing import Dict, Iterator, Optional
 
+from mtd_ring.errors import RingError
 from mtd_ring.honeypot_node import HoneypotNode
 
 
@@ -22,6 +23,8 @@ class HoneypotRing:
     def __init__(self) -> None:
         self._head: Optional[HoneypotNode] = None
         self._size: int = 0
+        # id -> node. It lets get() and remove() find a node without walking the ring.
+        self._index: Dict[str, HoneypotNode] = {}
 
     @property
     def head(self) -> Optional[HoneypotNode]:
@@ -31,11 +34,16 @@ class HoneypotRing:
         return self._size
 
     def __contains__(self, honeypot_id: str) -> bool:
-        raise NotImplementedError
+        return honeypot_id in self._index
 
     def __iter__(self) -> Iterator[HoneypotNode]:
         """Yield each node exactly once, starting at the head (one lap)."""
-        raise NotImplementedError
+        node = self._head
+        # A circular list never reaches None, so we stop after `size` steps instead.
+        # Looping "until node is None" would run forever.
+        for _ in range(self._size):
+            yield node
+            node = node.next
 
     def append(self, honeypot_id: str) -> HoneypotNode:
         """Create a node and insert it before the head (tail). O(1).
@@ -46,7 +54,10 @@ class HoneypotRing:
 
     def get(self, honeypot_id: str) -> HoneypotNode:
         """Return the node with that id in O(1). Raise ``RingError`` if unknown."""
-        raise NotImplementedError
+        node = self._index.get(honeypot_id)
+        if node is None:
+            raise RingError(f"Unknown honeypot: {honeypot_id}")
+        return node
 
     def remove(self, honeypot_id: str) -> HoneypotNode:
         """Unlink the node by joining its neighbors. O(1).
