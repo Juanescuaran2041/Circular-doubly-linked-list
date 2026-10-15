@@ -49,6 +49,7 @@
     <section class="stage" aria-label="Honeypot ring">
       <dl class="stats">
         <div><dt>Attacks absorbed</dt><dd id="stat-attacks" class="hot">0</dd></div>
+        <div><dt>Missed by rotation</dt><dd id="stat-missed" class="good">0</dd></div>
         <div><dt>Rotations</dt><dd id="stat-rotations">0</dd></div>
         <div><dt>In quarantine</dt><dd id="stat-isolated">0</dd></div>
         <div><dt>Servers in ring</dt><dd id="stat-servers">0</dd></div>
@@ -96,6 +97,14 @@
         <div class="actions">
           <button id="btn-add" type="button">Add honeypot</button>
           <button id="btn-reset" type="button">Reset simulation</button>
+        </div>
+      </section>
+
+      <section class="block" aria-labelledby="threat-title">
+        <h2 id="threat-title">Real attackers</h2>
+        <p id="threat-source" class="hint">Replays the top attacking IPs reported to SANS ISC DShield while time runs.</p>
+        <div class="actions">
+          <button id="btn-threats" type="button" class="toggle" aria-pressed="false">Replay real attackers</button>
         </div>
       </section>
 
