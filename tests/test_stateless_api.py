@@ -83,6 +83,11 @@ class StatelessApiTest(unittest.TestCase):
         self.assertEqual(ids, sorted(ids))
         self.assertEqual(len(set(ids)), len(ids))
 
+    def test_sync_returns_the_same_state_without_changing_it(self):
+        changed = self.api.post("/api/attack", {"id": "HP-3"})
+        synced = self.api.post("/api/sync", {SESSION_KEY: changed[SESSION_KEY]})
+        self.assertEqual(synced, changed)
+
     def test_reset_returns_a_fresh_session(self):
         first = self.api.post("/api/attack", {"id": "HP-3"})
         reset = self.api.post("/api/reset", {SESSION_KEY: first[SESSION_KEY]})

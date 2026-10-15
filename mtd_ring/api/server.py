@@ -66,6 +66,7 @@ class RingApi:
             "/api/add": self._add,
             "/api/reset": self._reset,
             "/api/threats": self._threats,
+            "/api/sync": self._sync,
         }
 
     def state(self) -> Dict[str, Any]:
@@ -126,6 +127,10 @@ class RingApi:
     def _reset(self, body: Dict[str, Any]) -> None:
         self._controller.reset()
         self._simulator.clear()
+
+    # Changes nothing; it lets a client that kept its own state ask for the current snapshot.
+    def _sync(self, body: Dict[str, Any]) -> None:
+        return None
 
     def _threats(self, body: Dict[str, Any]) -> None:
         enabled = body.get("enabled")
