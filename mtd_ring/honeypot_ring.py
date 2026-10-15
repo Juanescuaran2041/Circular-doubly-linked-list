@@ -113,4 +113,11 @@ class HoneypotRing:
 
     def clear(self) -> None:
         """Remove every node."""
-        raise NotImplementedError
+        # Cut each node's links first. Circular references would otherwise keep the
+        # old nodes alive for the garbage collector, and stale links are a bug trap.
+        for node in list(self):
+            node.next = None
+            node.prev = None
+        self._head = None
+        self._size = 0
+        self._index.clear()
