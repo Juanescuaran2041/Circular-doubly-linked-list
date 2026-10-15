@@ -62,6 +62,7 @@ const TRANSLATIONS = {
     "source.live": "SANS ISC DShield, top {n} attacking IPs",
     "source.offline": "Offline sample (SANS ISC could not be reached)",
     "source.pending": "SANS ISC DShield (not loaded yet)",
+    "source.loading": "SANS ISC DShield (loading the list, attacks start when it is ready)",
 
     "activity.title": "Activity",
     "activity.empty": "Nothing has happened yet. Attack a server or rotate the ring.",
@@ -94,6 +95,8 @@ const TRANSLATIONS = {
     "error.body_too_large": "The request body is too large",
     "error.unknown_route": "Unknown route",
     "error.not_found": "Not found",
+    "error.internal_error": "The server hit an unexpected error. Check the terminal where it is running",
+    "error.timeout": "The server took too long to answer",
   },
 
   es: {
@@ -154,6 +157,7 @@ const TRANSLATIONS = {
     "source.live": "SANS ISC DShield, las {n} IP que más atacan",
     "source.offline": "Muestra sin conexión (no se pudo contactar a SANS ISC)",
     "source.pending": "SANS ISC DShield (aún sin cargar)",
+    "source.loading": "SANS ISC DShield (cargando la lista, los ataques empiezan cuando esté lista)",
 
     "activity.title": "Actividad",
     "activity.empty": "Aún no ha pasado nada. Ataca un servidor o rota el anillo.",
@@ -186,6 +190,8 @@ const TRANSLATIONS = {
     "error.body_too_large": "El cuerpo de la solicitud es demasiado grande",
     "error.unknown_route": "Ruta desconocida",
     "error.not_found": "No encontrado",
+    "error.internal_error": "El servidor tuvo un error inesperado. Revisa la terminal donde está corriendo",
+    "error.timeout": "El servidor tardó demasiado en responder",
   },
 };
 

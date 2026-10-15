@@ -6,6 +6,8 @@ const RING_RADIUS = 220;
 const AUTO_STEP_MS = 1000;
 const FEED_LIMIT = 40;
 const MAX_PIPS = 6;
+const REQUEST_TIMEOUT_MS = 12000;
+const LOADING_POLL_MS = 1500;
 
 const ui = {
   ring: document.getElementById("ring"),
@@ -37,6 +39,7 @@ let autoTimer = null;
 let lastExposedId = null;
 let activityResetPending = false;
 let currentError = null;
+let loadingPoll = null;
 
 const session = { attacks: 0, rotations: 0, feed: [], pendingHits: [], pendingMisses: [], lastEventId: 0 };
 
@@ -47,8 +50,10 @@ async function request(path, body) {
   const options = body === undefined
     ? {}
     : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(path, options);
+    const response = await fetch(path, { ...options, signal: controller.signal });
     const data = await response.json();
     if (!response.ok) {
       showError({ code: data.code, params: data.params, fallback: data.error, status: response.status });
@@ -59,7 +64,9 @@ async function request(path, body) {
     state = data;
     render();
   } catch (error) {
-    showError({ code: "network" });
+    showError({ code: error.name === "AbortError" ? "timeout" : "network" });
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -401,6 +408,16 @@ function sourceText(threats) {
   return t(`source.${threats.source_kind}`, { n: threats.source_count });
 }
 
+// While the server loads the attacker list, ask again shortly so the interface leaves the loading state.
+function scheduleLoadingRefresh() {
+  const loading = state && state.threats && state.threats.enabled && state.threats.source_kind === "loading";
+  if (!loading || loadingPoll !== null) return;
+  loadingPoll = setTimeout(() => {
+    loadingPoll = null;
+    request("/api/state");
+  }, LOADING_POLL_MS);
+}
+
 function renderStats() {
   const threats = state.threats || { enabled: false, missed: 0, source_kind: "pending", source_count: 0 };
   ui.statAttacks.textContent = session.attacks.toLocaleString(language);
@@ -476,6 +493,7 @@ function render() {
   renderSelected();
   renderFeed();
   renderHistory();
+  scheduleLoadingRefresh();
 }
 
 /* ---------- Controls ---------- */
@@ -532,8 +550,11 @@ bind("btn-auto", toggleAuto);
 bind("btn-theme", toggleTheme);
 bind("btn-threats", async () => {
   ui.threatsButton.disabled = true;
-  await send("/api/threats", { enabled: !(state && state.threats && state.threats.enabled) });
-  ui.threatsButton.disabled = false;
+  try {
+    await send("/api/threats", { enabled: !(state && state.threats && state.threats.enabled) });
+  } finally {
+    ui.threatsButton.disabled = false;
+  }
 });
 bind("btn-attack", () => selectedId && send("/api/attack", { id: selectedId }));
 bind("btn-isolate", () => selectedId && send("/api/isolate", { id: selectedId }));
