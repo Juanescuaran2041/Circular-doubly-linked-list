@@ -18,9 +18,9 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--abyss);
   color: var(--mist);
   font-family: var(--font-body);
@@ -28,7 +28,7 @@ body {
   line-height: 1.5;
 }
 
-h1, h2, p, ol, ul { margin: 0; padding: 0; }
+h1, h2, p, ol, ul, dl, dd { margin: 0; padding: 0; }
 ol, ul { list-style: none; }
 
 /* Top bar */
@@ -54,21 +54,48 @@ ol, ul { list-style: none; }
 /* Workspace */
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   min-height: 0;
 }
 
 .stage {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  padding: 16px;
+  padding: 18px 24px 12px;
   min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
 }
 
-#ring { width: min(100%, 62vh); height: auto; display: block; overflow: visible; }
+/* Faint grid fading out from the center, so the ring sits on a "map" */
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 50% 52%, rgba(34, 211, 238, 0.09), transparent 48%),
+    linear-gradient(rgba(39, 50, 90, 0.5) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, rgba(39, 50, 90, 0.5) 1px, transparent 1px) 0 0 / 44px 44px;
+  -webkit-mask-image: radial-gradient(circle at 50% 52%, #000 15%, transparent 72%);
+  mask-image: radial-gradient(circle at 50% 52%, #000 15%, transparent 72%);
+}
+
+.stats {
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 36px;
+}
+.stats > div { display: flex; flex-direction: column-reverse; }
+.stats dt { color: var(--mist-dim); font-size: 0.8125rem; }
+.stats dd { font-family: var(--font-display); font-size: 1.9rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stats dd.hot { color: var(--rose); }
+
+#ring { flex: 1 1 0; min-height: 0; width: 100%; max-width: 760px; display: block; overflow: visible; }
 
 .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; color: var(--mist-dim); font-size: 0.875rem; }
 .legend li { display: flex; align-items: center; gap: 8px; }
@@ -81,6 +108,10 @@ ol, ul { list-style: none; }
 .line.prev { border-color: var(--violet); }
 
 /* Ring (SVG) */
+.orbit { fill: none; stroke: var(--line); stroke-width: 1; }
+.orbit.outer { stroke-dasharray: 2 8; opacity: 0.8; }
+.orbit.inner { opacity: 0.5; }
+
 .node { cursor: pointer; outline: none; }
 .node-shape { stroke-width: 2.5; transition: fill 0.25s, stroke 0.25s; }
 .node.waiting .node-shape { fill: var(--deck); stroke: #4a5a92; }
@@ -89,16 +120,23 @@ ol, ul { list-style: none; }
 .node:hover .node-shape { stroke-width: 3.5; }
 .node.selected .node-shape { stroke-width: 4; filter: drop-shadow(0 0 7px var(--mist)); }
 .node:focus-visible .node-shape { stroke-width: 4.5; filter: drop-shadow(0 0 7px var(--mist)); }
+.node.hit .node-shape { animation: hit-flash 0.7s ease-out; }
 .node-id { font-family: var(--font-display); font-size: 15px; font-weight: 700; text-anchor: middle; fill: var(--mist); pointer-events: none; }
 .node-sub { font-size: 11px; text-anchor: middle; fill: var(--mist-dim); pointer-events: none; font-variant-numeric: tabular-nums; }
 .node.exposed .node-sub { fill: var(--cyan); }
 .node.isolated .node-sub { fill: var(--amber); }
+
+.threat-pip { fill: var(--line); }
+.threat-pip.on { fill: var(--rose); }
 
 .arc-next { fill: none; stroke: var(--mist-dim); stroke-width: 1.6; opacity: 0.75; }
 .arc-prev { fill: none; stroke: var(--violet); stroke-width: 1.6; opacity: 0.85; }
 
 .center-id { font-family: var(--font-display); font-size: 54px; font-weight: 700; text-anchor: middle; fill: var(--cyan); }
 .center-line { font-size: 15px; text-anchor: middle; fill: var(--mist-dim); font-variant-numeric: tabular-nums; }
+
+/* A slow ripple leaves the exposed server: the only ambient motion on the page */
+.ripple { fill: none; stroke: var(--cyan); stroke-width: 2; pointer-events: none; transform-box: fill-box; transform-origin: center; animation: ripple 3.2s ease-out infinite; }
 
 .trail {
   fill: none;
@@ -111,25 +149,55 @@ ol, ul { list-style: none; }
   animation: trail-sweep 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+.beam {
+  fill: none;
+  stroke: var(--rose);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  filter: drop-shadow(0 0 6px var(--rose));
+  pointer-events: none;
+  animation: beam-strike 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 @keyframes trail-sweep {
   0% { stroke-dashoffset: 1; opacity: 1; }
   65% { stroke-dashoffset: 0; opacity: 1; }
   100% { stroke-dashoffset: 0; opacity: 0; }
 }
 
+@keyframes beam-strike {
+  0% { stroke-dashoffset: 1; opacity: 1; }
+  55% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+@keyframes hit-flash {
+  0% { stroke: var(--rose); filter: drop-shadow(0 0 18px var(--rose)); }
+}
+
+@keyframes ripple {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
 /* Control rail */
 .rail {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
   background: var(--deck);
   border-left: 1px solid var(--line);
 }
 
-.block { padding: 20px 24px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+.block { padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
 .block h2, .timeline h2 { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; }
 .hint { color: var(--mist-dim); font-size: 0.9rem; }
 .selected-name { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
 .selected-meta { color: var(--mist-dim); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.meter { height: 6px; margin-top: 8px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.meter span { display: block; height: 100%; width: 0; background: var(--rose); border-radius: 3px; transition: width 0.3s; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 button {
@@ -155,7 +223,7 @@ button.danger:hover:not(:disabled) { background: rgba(251, 113, 133, 0.2); borde
 .toggle[aria-pressed="true"] { color: #04202a; background: var(--violet); border-color: var(--violet); font-weight: 600; }
 
 .error {
-  margin: 16px 24px;
+  margin: 16px 24px 0;
   padding: 10px 14px;
   color: var(--rose);
   background: rgba(251, 113, 133, 0.1);
@@ -164,12 +232,30 @@ button.danger:hover:not(:disabled) { background: rgba(251, 113, 133, 0.2); borde
   font-size: 0.9rem;
 }
 
+/* Activity feed */
+.activity { flex: 1 1 auto; border-bottom: 0; min-height: 160px; }
+.feed { display: flex; flex-direction: column; }
+.feed li {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 10px;
+  padding: 8px 0 8px 10px;
+  border-left: 3px solid var(--line);
+  border-bottom: 1px solid rgba(39, 50, 90, 0.6);
+  font-size: 0.9rem;
+}
+.feed time { color: var(--mist-dim); font-variant-numeric: tabular-nums; }
+.feed li.attack { border-left-color: var(--rose); }
+.feed li.rotate { border-left-color: var(--cyan); }
+.feed li.isolate { border-left-color: var(--amber); }
+.feed li.release { border-left-color: var(--violet); }
+
 /* Timeline */
 .timeline {
   display: flex;
   align-items: center;
   gap: 20px;
-  padding: 14px 28px;
+  padding: 12px 28px;
   background: var(--deck);
   border-top: 1px solid var(--line);
 }
@@ -188,14 +274,16 @@ button.danger:hover:not(:disabled) { background: rgba(251, 113, 133, 0.2); borde
 .history li:last-child .stop { color: #04202a; background: var(--cyan); border-color: var(--cyan); font-weight: 600; }
 
 @media (max-width: 860px) {
+  body { height: auto; min-height: 100vh; }
   .workspace { grid-template-columns: 1fr; }
-  .rail { border-left: 0; border-top: 1px solid var(--line); }
+  .stage { overflow: visible; }
+  #ring { flex: none; height: auto; }
+  .rail { border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
   .topbar, .timeline { padding-left: 16px; padding-right: 16px; }
   .timeline { flex-direction: column; align-items: flex-start; gap: 4px; }
-  #ring { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
-  .trail { display: none; }
+  .trail, .beam, .ripple { display: none; }
 }
