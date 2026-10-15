@@ -41,7 +41,21 @@ class MTDController:
 
     # Moves the exposure to the next (1) or previous (-1) available honeypot.
     def rotate(self, direction: int = 1) -> None:
-        raise NotImplementedError
+        if direction not in (1, -1):
+            raise RingError("direction must be 1 (forward) or -1 (backward)")
+        anchor = self._exposed
+        if anchor is None:
+            return
+
+        candidate = anchor
+        for _ in range(len(self._ring)):
+            candidate = candidate.next if direction == 1 else candidate.prev
+            if candidate is anchor and anchor.is_exposed():
+                break
+            if candidate.is_available():
+                self._expose(candidate)
+                return
+        self._schedule_next_rotation()
 
     # Counts an attack, isolating the target at the threshold and rotating if it was exposed.
     def register_attack(self, honeypot_id: str) -> None:
