@@ -88,7 +88,19 @@ class MTDController:
 
     # Moves the simulated clock, running the due rotation and releasing finished quarantines.
     def advance_time(self, ms: int) -> None:
-        raise NotImplementedError
+        if ms < 0:
+            raise RingError("time cannot go backward")
+        self._now += ms
+
+        if len(self._ring) > 0 and self._now >= self._next_rotation_at:
+            self.rotate(1)
+
+        for node in self._ring:
+            if node.quarantine_expired(self._now):
+                node.release()
+
+        if len(self._ring) > 0 and not self._has_exposed():
+            self.rotate(1)
 
     # Builds the dictionary the frontend draws.
     def snapshot(self) -> Dict[str, Any]:
