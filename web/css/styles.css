@@ -275,6 +275,12 @@ button.primary:hover:not(:disabled) { background: var(--primary-hover); border-c
 button.danger { color: var(--rose); background: var(--rose-soft); border-color: var(--rose-edge); }
 button.danger:hover:not(:disabled) { background: var(--rose-soft); border-color: var(--rose); }
 .toggle { flex: 0 0 auto; }
+
+.icon-button { flex: 0 0 auto; width: 40px; padding: 0; display: inline-grid; place-items: center; }
+.icon { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.icon-moon { display: none; }
+:root[data-theme="light"] .icon-sun { display: none; }
+:root[data-theme="light"] .icon-moon { display: block; }
 .toggle[aria-pressed="true"] { color: var(--on-violet); background: var(--violet-bg); border-color: var(--violet-bg); font-weight: 600; }
 
 .error {

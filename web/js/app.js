@@ -400,10 +400,12 @@ function toggleAuto() {
 
 /* ---------- Theme ---------- */
 
-// Shows the action the button will perform, not the current theme.
+// The icon button describes the action it will perform, not the current theme.
 function syncThemeButton() {
   const isLight = document.documentElement.getAttribute("data-theme") === "light";
-  ui.theme.textContent = isLight ? "Dark mode" : "Light mode";
+  const label = isLight ? "Switch to dark mode" : "Switch to light mode";
+  ui.theme.setAttribute("aria-label", label);
+  ui.theme.title = label;
 }
 
 function toggleTheme() {

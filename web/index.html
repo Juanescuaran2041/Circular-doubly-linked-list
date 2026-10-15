@@ -32,7 +32,15 @@
     <div class="clock">
       <span class="clock-value" id="clock">00:00</span>
       <span class="clock-caption">simulated time</span>
-      <button id="btn-theme" type="button" class="toggle">Light mode</button>
+      <button id="btn-theme" type="button" class="icon-button" aria-label="Switch to light mode" title="Switch to light mode">
+        <svg class="icon icon-sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.2"/>
+          <path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9"/>
+        </svg>
+        <svg class="icon icon-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M20.2 14.6A8.4 8.4 0 0 1 9.4 3.8a8.4 8.4 0 1 0 10.8 10.8z"/>
+        </svg>
+      </button>
       <button id="btn-auto" type="button" class="toggle" aria-pressed="false">Run automatically</button>
     </div>
   </header>
