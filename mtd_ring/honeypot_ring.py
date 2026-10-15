@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Iterator, Optional
 
-from mtd_ring.errors import RingError
+from mtd_ring.errors import DuplicateHoneypotError, UnknownHoneypotError
 from mtd_ring.honeypot_node import HoneypotNode
 
 
@@ -35,7 +35,7 @@ class HoneypotRing:
     # Adds a new honeypot at the tail (just before the head) in O(1).
     def append(self, honeypot_id: str) -> HoneypotNode:
         if honeypot_id in self._index:
-            raise RingError(f"Duplicate honeypot id: {honeypot_id}")
+            raise DuplicateHoneypotError(honeypot_id)
 
         node = HoneypotNode(honeypot_id)
 
@@ -59,7 +59,7 @@ class HoneypotRing:
     def get(self, honeypot_id: str) -> HoneypotNode:
         node = self._index.get(honeypot_id)
         if node is None:
-            raise RingError(f"Unknown honeypot: {honeypot_id}")
+            raise UnknownHoneypotError(honeypot_id)
         return node
 
     # Unlinks a honeypot by joining its two neighbors in O(1).

@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from mtd_ring.config import RingConfig
-from mtd_ring.errors import RingError
+from mtd_ring.errors import (
+    InvalidDirectionError,
+    IsolatedHoneypotError,
+    NegativeTimeError,
+)
 from mtd_ring.honeypot_node import HoneypotNode
 from mtd_ring.honeypot_ring import HoneypotRing
 
@@ -42,7 +46,7 @@ class MTDController:
     # Moves the exposure to the next (1) or previous (-1) available honeypot.
     def rotate(self, direction: int = 1) -> None:
         if direction not in (1, -1):
-            raise RingError("direction must be 1 (forward) or -1 (backward)")
+            raise InvalidDirectionError()
         anchor = self._exposed
         if anchor is None:
             return
@@ -61,7 +65,7 @@ class MTDController:
     def register_attack(self, honeypot_id: str) -> None:
         node = self._ring.get(honeypot_id)
         if node.is_isolated():
-            raise RingError(f"{honeypot_id} is isolated and cannot be attacked")
+            raise IsolatedHoneypotError(honeypot_id)
 
         was_exposed = node.is_exposed()
         total = node.record_attack()
@@ -89,7 +93,7 @@ class MTDController:
     # Moves the simulated clock, running the due rotation and releasing finished quarantines.
     def advance_time(self, ms: int) -> None:
         if ms < 0:
-            raise RingError("time cannot go backward")
+            raise NegativeTimeError()
         self._now += ms
 
         if len(self._ring) > 0 and self._now >= self._next_rotation_at:
