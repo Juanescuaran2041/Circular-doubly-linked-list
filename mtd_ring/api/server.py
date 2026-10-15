@@ -139,7 +139,7 @@ class RingApi:
             self._simulator.disable()
 
 
-def make_handler(api: RingApi) -> type:
+def make_handler(api: Any, max_body_bytes: int = MAX_BODY_BYTES) -> type:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             try:
@@ -171,7 +171,7 @@ def make_handler(api: RingApi) -> type:
 
         def _read_body(self) -> Dict[str, Any]:
             length = int(self.headers.get("Content-Length") or 0)
-            if length > MAX_BODY_BYTES:
+            if length > max_body_bytes:
                 raise ApiError("request body too large", "body_too_large")
             if length == 0:
                 return {}
@@ -216,11 +216,13 @@ def make_handler(api: RingApi) -> type:
 
 
 # Binds the first free port starting at `port`, because the preferred one may be taken or reserved.
-def bind_server(api: RingApi, host: str, port: int, attempts: int = PORT_ATTEMPTS) -> Tuple[ThreadingHTTPServer, int]:
+def bind_server(
+    api: Any, host: str, port: int, attempts: int = PORT_ATTEMPTS, body_limit: int = MAX_BODY_BYTES
+) -> Tuple[ThreadingHTTPServer, int]:
     last_error: Optional[OSError] = None
     for candidate in range(port, port + attempts):
         try:
-            return ThreadingHTTPServer((host, candidate), make_handler(api)), candidate
+            return ThreadingHTTPServer((host, candidate), make_handler(api, body_limit)), candidate
         except OSError as error:
             if error.errno not in PORT_UNAVAILABLE_ERRORS:
                 raise
@@ -228,11 +230,19 @@ def bind_server(api: RingApi, host: str, port: int, attempts: int = PORT_ATTEMPT
     raise OSError(f"No free port between {port} and {port + attempts - 1}") from last_error
 
 
-def run(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True) -> None:
-    controller = MTDController()
-    api = RingApi(controller, ThreatSimulator(controller, SansIscFeed()))
+def run(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True, stateless: bool = False) -> None:
+    if stateless:
+        from mtd_ring.api.stateless import StatelessApi, SESSION_BODY_BYTES
+
+        # Same behavior as the Vercel deployment: the browser keeps the state, the server remembers nothing.
+        api: Any = StatelessApi(SansIscFeed(timeout_seconds=3, spawn=lambda task: task()))
+        body_limit = SESSION_BODY_BYTES
+    else:
+        controller = MTDController()
+        api = RingApi(controller, ThreatSimulator(controller, SansIscFeed()))
+        body_limit = MAX_BODY_BYTES
     try:
-        server, actual_port = bind_server(api, host, port)
+        server, actual_port = bind_server(api, host, port, body_limit=body_limit)
     except OSError as error:
         print(f"Could not start the server: {error}", file=sys.stderr)
         raise SystemExit(1) from error
