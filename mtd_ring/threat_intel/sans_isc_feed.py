@@ -4,7 +4,7 @@ import ipaddress
 import json
 import time
 import urllib.request
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Tuple
 
 from mtd_ring.threat_intel.attacker import Attacker
 
@@ -44,7 +44,14 @@ class SansIscFeed:
         self._live = False
         self._expires_at: Optional[float] = None
 
-    # Describes where the current attackers come from, for the UI.
+    # Tells where the attackers come from ("pending", "live" or "offline") and how many there are.
+    @property
+    def status(self) -> Tuple[str, int]:
+        if self._expires_at is None:
+            return "pending", 0
+        return ("live" if self._live else "offline"), len(self._attackers)
+
+    # Describes where the current attackers come from, in English.
     @property
     def source(self) -> str:
         if self._expires_at is None:

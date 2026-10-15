@@ -28,6 +28,19 @@ class SansIscFeedTest(unittest.TestCase):
         feed = SansIscFeed(fetch_json=lambda url: SAMPLE)
         self.assertIn("not loaded yet", feed.source)
 
+    def test_status_goes_from_pending_to_live_or_offline(self):
+        live = SansIscFeed(fetch_json=lambda url: SAMPLE)
+        self.assertEqual(live.status, ("pending", 0))
+        live.attackers()
+        self.assertEqual(live.status, ("live", 2))
+
+        def failing(url):
+            raise OSError("no network")
+
+        offline = SansIscFeed(fetch_json=failing)
+        offline.attackers()
+        self.assertEqual(offline.status, ("offline", len(OFFLINE_SAMPLE)))
+
     def test_parses_a_dictionary_keyed_by_position(self):
         feed = SansIscFeed(fetch_json=lambda url: {"0": SAMPLE[0], "1": SAMPLE[1], "date": "2026-10-15"})
         self.assertEqual(len(feed.attackers()), 2)

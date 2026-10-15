@@ -10,6 +10,7 @@ from mtd_ring.threat_intel.attacker import Attacker
 
 class FakeFeed:
     source = "fake feed"
+    status = ("live", 1)
 
     def attackers(self):
         return [Attacker("203.0.113.9", 100, 1)]
@@ -77,6 +78,11 @@ class ThreatSimulatorTest(unittest.TestCase):
         simulator.enable()
         with self.assertRaises(NegativeTimeError):
             simulator.advance(-1)
+
+    def test_snapshot_reports_the_source_kind_and_size(self):
+        _, simulator = make()
+        snapshot = simulator.snapshot()
+        self.assertEqual((snapshot["source_kind"], snapshot["source_count"]), ("live", 1))
 
     def test_clear_forgets_events_and_totals(self):
         _, simulator = make(attack_chance=1.0)
