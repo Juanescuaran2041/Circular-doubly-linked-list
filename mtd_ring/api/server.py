@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+import json
+import mimetypes
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any, Callable, Dict
+
+from mtd_ring.errors import RingError
+from mtd_ring.mtd_controller import MTDController
+
+WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
+MAX_BODY_BYTES = 4096
+
+
+class ApiError(Exception):
+    """A client error that maps to an HTTP 400 response."""
+
+
+class RingApi:
+    """Translates JSON requests into ``MTDController`` calls. Thread-safe."""
+
+    def __init__(self, controller: MTDController) -> None:
+        self._controller = controller
+        self._lock = threading.Lock()
+        self._routes: Dict[str, Callable[[Dict[str, Any]], None]] = {
+            "/api/time": self._time,
+            "/api/rotate": self._rotate,
+            "/api/attack": self._attack,
+            "/api/isolate": self._isolate,
+            "/api/remove": self._remove,
+            "/api/add": self._add,
+            "/api/reset": self._reset,
+        }
+
+    def state(self) -> Dict[str, Any]:
+        with self._lock:
+            return self._controller.snapshot()
+
+    def post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        action = self._routes.get(path)
+        if action is None:
+            raise KeyError(path)
+        with self._lock:
+            try:
+                action(body)
+            except RingError as error:
+                raise ApiError(str(error)) from error
+            return self._controller.snapshot()
+
+    @staticmethod
+    def _required(body: Dict[str, Any], key: str, kind: type) -> Any:
+        value = body.get(key)
+        if not isinstance(value, kind) or isinstance(value, bool):
+            raise ApiError(f"'{key}' is required and must be of type {kind.__name__}")
+        return value
+
+    def _time(self, body: Dict[str, Any]) -> None:
+        ms = self._required(body, "ms", int)
+        if ms < 0:
+            raise ApiError("'ms' must not be negative")
+        self._controller.advance_time(ms)
+
+    def _rotate(self, body: Dict[str, Any]) -> None:
+        self._controller.rotate(body.get("direction", 1))
+
+    def _attack(self, body: Dict[str, Any]) -> None:
+        self._controller.register_attack(self._required(body, "id", str))
+
+    def _isolate(self, body: Dict[str, Any]) -> None:
+        self._controller.isolate(self._required(body, "id", str))
+
+    def _remove(self, body: Dict[str, Any]) -> None:
+        self._controller.remove(self._required(body, "id", str))
+
+    def _add(self, body: Dict[str, Any]) -> None:
+        self._controller.add_honeypot()
+
+    def _reset(self, body: Dict[str, Any]) -> None:
+        self._controller.reset()
+
+
+def make_handler(api: RingApi) -> type:
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.path == "/api/state":
+                self._send_json(200, api.state())
+            else:
+                self._send_static()
+
+        def do_POST(self) -> None:
+            try:
+                body = self._read_body()
+                self._send_json(200, api.post(self.path, body))
+            except ApiError as error:
+                self._send_json(400, {"error": str(error)})
+            except KeyError:
+                self._send_json(404, {"error": "unknown route"})
+
+        def _read_body(self) -> Dict[str, Any]:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > MAX_BODY_BYTES:
+                raise ApiError("request body too large")
+            if length == 0:
+                return {}
+            try:
+                body = json.loads(self.rfile.read(length))
+            except ValueError as error:
+                raise ApiError("invalid JSON") from error
+            if not isinstance(body, dict):
+                raise ApiError("JSON body must be an object")
+            return body
+
+        def _send_json(self, status: int, payload: Dict[str, Any]) -> None:
+            data = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _send_static(self) -> None:
+            relative = self.path.split("?", 1)[0].lstrip("/") or "index.html"
+            target = (WEB_ROOT / relative).resolve()
+            if WEB_ROOT not in target.parents or not target.is_file():
+                self._send_json(404, {"error": "not found"})
+                return
+            data = target.read_bytes()
+            content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass
+
+    return Handler
+
+
+def run(host: str = "127.0.0.1", port: int = 8000) -> None:
+    api = RingApi(MTDController())
+    server = ThreadingHTTPServer((host, port), make_handler(api))
+    print(f"Serving on http://{host}:{port}  (Ctrl+C to stop)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
