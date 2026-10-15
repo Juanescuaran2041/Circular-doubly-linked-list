@@ -5,7 +5,7 @@ import mimetypes
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from mtd_ring.errors import RingError
 from mtd_ring.mtd_controller import MTDController
@@ -17,9 +17,17 @@ MAX_BODY_BYTES = 4096
 MAX_TIME_STEP_MS = 600_000
 
 
-# A client error that maps to an HTTP 400 response.
+# A client error that maps to an HTTP 400 response; the code and params let the client translate it.
 class ApiError(Exception):
-    pass
+
+    def __init__(self, message: str, code: str = "bad_request", params: Optional[Dict[str, Any]] = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
+
+    # Builds the JSON body of the error response.
+    def to_dict(self) -> Dict[str, Any]:
+        return {"error": str(self), "code": self.code, "params": self.params}
 
 
 # Translates JSON requests into controller calls; the lock keeps it thread-safe.
@@ -52,7 +60,7 @@ class RingApi:
             try:
                 action(body)
             except RingError as error:
-                raise ApiError(str(error)) from error
+                raise ApiError(str(error), error.code, error.params) from error
             return self._snapshot()
 
     # The ring snapshot plus the threat simulator state.
@@ -65,15 +73,19 @@ class RingApi:
     def _required(body: Dict[str, Any], key: str, kind: type) -> Any:
         value = body.get(key)
         if not isinstance(value, kind) or isinstance(value, bool):
-            raise ApiError(f"'{key}' is required and must be of type {kind.__name__}")
+            raise ApiError(
+                f"'{key}' is required and must be of type {kind.__name__}",
+                "field_invalid",
+                {"field": key, "type": kind.__name__},
+            )
         return value
 
     def _time(self, body: Dict[str, Any]) -> None:
         ms = self._required(body, "ms", int)
         if ms < 0:
-            raise ApiError("'ms' must not be negative")
+            raise ApiError("'ms' must not be negative", "negative_time")
         if ms > MAX_TIME_STEP_MS:
-            raise ApiError(f"'ms' must not exceed {MAX_TIME_STEP_MS}")
+            raise ApiError(f"'ms' must not exceed {MAX_TIME_STEP_MS}", "time_too_large", {"max": MAX_TIME_STEP_MS})
         self._simulator.advance(ms)
 
     def _rotate(self, body: Dict[str, Any]) -> None:
@@ -98,7 +110,9 @@ class RingApi:
     def _threats(self, body: Dict[str, Any]) -> None:
         enabled = body.get("enabled")
         if not isinstance(enabled, bool):
-            raise ApiError("'enabled' is required and must be a boolean")
+            raise ApiError(
+                "'enabled' is required and must be a boolean", "field_invalid", {"field": "enabled", "type": "bool"}
+            )
         if enabled:
             self._simulator.enable()
         else:
@@ -118,22 +132,22 @@ def make_handler(api: RingApi) -> type:
                 body = self._read_body()
                 self._send_json(200, api.post(self.path, body))
             except ApiError as error:
-                self._send_json(400, {"error": str(error)})
+                self._send_json(400, error.to_dict())
             except KeyError:
-                self._send_json(404, {"error": "unknown route"})
+                self._send_json(404, {"error": "unknown route", "code": "unknown_route", "params": {}})
 
         def _read_body(self) -> Dict[str, Any]:
             length = int(self.headers.get("Content-Length") or 0)
             if length > MAX_BODY_BYTES:
-                raise ApiError("request body too large")
+                raise ApiError("request body too large", "body_too_large")
             if length == 0:
                 return {}
             try:
                 body = json.loads(self.rfile.read(length))
             except ValueError as error:
-                raise ApiError("invalid JSON") from error
+                raise ApiError("invalid JSON", "invalid_json") from error
             if not isinstance(body, dict):
-                raise ApiError("JSON body must be an object")
+                raise ApiError("JSON body must be an object", "body_not_object")
             return body
 
         def _send_json(self, status: int, payload: Dict[str, Any]) -> None:
@@ -148,7 +162,7 @@ def make_handler(api: RingApi) -> type:
             relative = self.path.split("?", 1)[0].lstrip("/") or "index.html"
             target = (WEB_ROOT / relative).resolve()
             if WEB_ROOT not in target.parents or not target.is_file():
-                self._send_json(404, {"error": "not found"})
+                self._send_json(404, {"error": "not found", "code": "not_found", "params": {}})
                 return
             data = target.read_bytes()
             content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
