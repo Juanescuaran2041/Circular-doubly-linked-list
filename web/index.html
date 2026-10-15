@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mirage Ring</title>
+  <script>
+    (function () {
+      var theme = "dark";
+      try {
+        theme = localStorage.getItem("mirage-theme") ||
+          (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      } catch (error) {}
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
   <link rel="icon" type="image/png" href="/assets/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,6 +32,7 @@
     <div class="clock">
       <span class="clock-value" id="clock">00:00</span>
       <span class="clock-caption">simulated time</span>
+      <button id="btn-theme" type="button" class="toggle">Light mode</button>
       <button id="btn-auto" type="button" class="toggle" aria-pressed="false">Run automatically</button>
     </div>
   </header>

@@ -13,6 +13,7 @@ const ui = {
   error: document.getElementById("error"),
   history: document.getElementById("history"),
   auto: document.getElementById("btn-auto"),
+  theme: document.getElementById("btn-theme"),
   selectedEmpty: document.getElementById("selected-empty"),
   selectedDetail: document.getElementById("selected-detail"),
   selectedName: document.getElementById("selected-name"),
@@ -165,11 +166,11 @@ function arcPath(from, to, radius, clockwise) {
   return `M ${start.x} ${start.y} A ${radius} ${radius} 0 0 ${clockwise ? 1 : 0} ${end.x} ${end.y}`;
 }
 
-function addArrowMarker(defs, id, color) {
+function addArrowMarker(defs, id) {
   const marker = svgElement("marker", {
     id, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto",
   });
-  marker.appendChild(svgElement("path", { d: "M 0 1 L 9 5 L 0 9 z", fill: color }));
+  marker.appendChild(svgElement("path", { d: "M 0 1 L 9 5 L 0 9 z", class: id }));
   defs.appendChild(marker);
 }
 
@@ -295,8 +296,8 @@ function renderRing() {
   ui.ring.replaceChildren();
 
   const defs = svgElement("defs");
-  addArrowMarker(defs, "head-next", "#9aa6c8");
-  addArrowMarker(defs, "head-prev", "#8b5cf6");
+  addArrowMarker(defs, "head-next");
+  addArrowMarker(defs, "head-prev");
   ui.ring.appendChild(defs);
   drawOrbits();
 
@@ -397,6 +398,25 @@ function toggleAuto() {
   ui.auto.setAttribute("aria-pressed", String(enabled));
 }
 
+/* ---------- Theme ---------- */
+
+// Shows the action the button will perform, not the current theme.
+function syncThemeButton() {
+  const isLight = document.documentElement.getAttribute("data-theme") === "light";
+  ui.theme.textContent = isLight ? "Dark mode" : "Light mode";
+}
+
+function toggleTheme() {
+  const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  try {
+    localStorage.setItem("mirage-theme", next);
+  } catch (error) {
+    // Storage can be blocked; the theme still applies for this visit.
+  }
+  syncThemeButton();
+}
+
 function bind(id, handler) {
   document.getElementById(id).addEventListener("click", handler);
 }
@@ -406,6 +426,7 @@ bind("btn-back", () => send("/api/rotate", { direction: -1 }));
 bind("btn-time-10", () => send("/api/time", { ms: 10000 }));
 bind("btn-time-30", () => send("/api/time", { ms: 30000 }));
 bind("btn-auto", toggleAuto);
+bind("btn-theme", toggleTheme);
 bind("btn-attack", () => selectedId && send("/api/attack", { id: selectedId }));
 bind("btn-isolate", () => selectedId && send("/api/isolate", { id: selectedId }));
 bind("btn-remove", () => selectedId && send("/api/remove", { id: selectedId }));
@@ -416,4 +437,5 @@ bind("btn-reset", () => {
   send("/api/reset");
 });
 
+syncThemeButton();
 request("/api/state");
