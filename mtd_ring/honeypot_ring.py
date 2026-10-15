@@ -88,7 +88,28 @@ class HoneypotRing:
         Update ``head`` if the removed node was the head. Return the removed node.
         Raise ``RingError`` if unknown.
         """
-        raise NotImplementedError
+        node = self.get(honeypot_id)
+
+        if self._size == 1:
+            # The only node: nothing left to link, the ring becomes empty.
+            self._head = None
+        else:
+            # Join the two neighbors to each other, skipping `node`:
+            #   before <-> node <-> after   becomes   before <-> after
+            before = node.prev
+            after = node.next
+            before.next = after
+            after.prev = before
+            # If we removed the head, the next node takes over as head.
+            if node is self._head:
+                self._head = after
+
+        # Cut the removed node's own links so it no longer points into the ring.
+        node.next = None
+        node.prev = None
+        self._size -= 1
+        del self._index[honeypot_id]
+        return node
 
     def clear(self) -> None:
         """Remove every node."""
